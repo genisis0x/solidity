@@ -19,6 +19,8 @@ Compiler Features:
 Bugfixes:
 * Yul: Fix incorrect serialization of Yul object names containing double quotes and escape sequences, producing output that could not be parsed as valid Yul.
 * Yul EVM Code Transform: Improve stack shuffler performance by fixing a BFS deduplication issue.
+* TypeChecker: Remove the wrong codegen assumption that a conversion between non-byte calldata arrays can never happen.
+* TypeChecker: Fix spurious comparison of tuples containing reference types, which led to unnecessary conversions between tuples of the same type.
 
 
 ### 0.8.34 (2026-02-18)
