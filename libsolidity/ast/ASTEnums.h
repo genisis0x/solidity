@@ -36,27 +36,25 @@ enum class VirtualLookup { Static, Virtual, Super };
 // How a function can mutate the EVM state.
 enum class StateMutability { Pure, View, NonPayable, Payable };
 
+/// State mutability names used for conversion from and to std::string.
+static constexpr std::array<std::string, 4> STATE_MUTABILITY_NAMES  = { "pure", "view", "nonpayable", "payable" };
+
+inline constexpr StateMutability stateMutabilityFromString(std::string const& _stateMutability)
+{
+	auto it = std::ranges::find(STATE_MUTABILITY_NAMES, _stateMutability);
+	solAssert(it != STATE_MUTABILITY_NAMES.end(), "Unknown state mutability \"" + _stateMutability + "\"");
+	return static_cast<StateMutability>(std::ranges::distance(STATE_MUTABILITY_NAMES.begin(), it));
+}
+
+inline constexpr std::string stateMutabilityToString(StateMutability const& _stateMutability)
+{
+	return STATE_MUTABILITY_NAMES[static_cast<std::size_t>(_stateMutability)];
+}
+
 /// Visibility ordered from restricted to unrestricted.
 enum class Visibility { Default, Private, Internal, Public, External };
 
 enum class Arithmetic { Checked, Wrapping };
-
-inline std::string stateMutabilityToString(StateMutability const& _stateMutability)
-{
-	switch (_stateMutability)
-	{
-	case StateMutability::Pure:
-		return "pure";
-	case StateMutability::View:
-		return "view";
-	case StateMutability::NonPayable:
-		return "nonpayable";
-	case StateMutability::Payable:
-		return "payable";
-	default:
-		solAssert(false, "Unknown state mutability.");
-	}
-}
 
 class Type;
 
