@@ -163,6 +163,8 @@ set(sources
 	interface/StandardCompiler.h
 	interface/StandardJSONInput.h
 	interface/StandardJSONInput.cpp
+	interface/StandardJSONOutput.h
+	interface/StandardJSONOutput.cpp
 	interface/StorageLayout.cpp
 	interface/StorageLayout.h
 	interface/UniversalCallback.h
