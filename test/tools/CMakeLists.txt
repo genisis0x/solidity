@@ -23,6 +23,7 @@ add_executable(isoltest
 	../libsolidity/util/BytesUtils.cpp
 	../libsolidity/util/Common.cpp
 	../libsolidity/util/ContractABIUtils.cpp
+	../libsolidity/util/StandardJSONCompiler.cpp
 	../libsolidity/util/TestFileParser.cpp
 	../libsolidity/util/TestFunctionCall.cpp
 	../libsolidity/GasTest.cpp
