@@ -143,6 +143,7 @@ set(sources
 	formal/Z3SMTLib2Interface.h
 	interface/ABI.cpp
 	interface/ABI.h
+	interface/Common.h
 	interface/CompilerStack.cpp
 	interface/CompilerStack.h
 	interface/DebugSettings.h
