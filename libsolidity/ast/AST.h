@@ -297,9 +297,17 @@ public:
 	/// This can only be called once types of variable declarations have already been resolved.
 	virtual Type const* type() const = 0;
 
-	/// @returns the type for members of the containing contract type that refer to this declaration.
+	/// Defines type of member access via contract type name.
+	enum class ContractNameAccessKind {
+		Local,   ///< Via contract name from local contract scope or deriving contract.
+		Foreign, ///< Via contract name from foreign (unrelated) contract.
+		Library, ///< Via library name.
+	};
+
+	/// @returns the type for members of the containing contract type that refer to this declaration. Depends on access
+	/// context defined by `ContractNameAccessKind`.
 	/// This can only be called once types of variable declarations have already been resolved.
-	virtual Type const* typeViaContractName() const { return type(); }
+	virtual Type const* typeViaContractName(ContractNameAccessKind) const { return type(); }
 
 	/// @param _internal false indicates external interface is concerned, true indicates internal interface is concerned.
 	/// @returns null when it is not accessible as a function.
@@ -1040,7 +1048,7 @@ public:
 	bool isVisibleViaContractInstance() const override
 	{
 		solAssert(!isFree(), "");
-		return isOrdinary() && visibility() >= Visibility::Public;
+		return isPartOfExternalInterface();
 	}
 	bool isPartOfExternalInterface() const override { return isOrdinary() && isPublic(); }
 
@@ -1053,7 +1061,7 @@ public:
 	std::string externalIdentifierHex() const;
 
 	Type const* type() const override;
-	Type const* typeViaContractName() const override;
+	Type const* typeViaContractName(ContractNameAccessKind _accessKind) const override;
 
 	/// @param _internal false indicates external interface is concerned, true indicates internal interface is concerned.
 	/// @returns null when it is not accessible as a function.
