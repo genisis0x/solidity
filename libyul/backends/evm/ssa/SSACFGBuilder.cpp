@@ -74,7 +74,7 @@ std::unique_ptr<ControlFlow> SSACFGBuilder::build(
 	bool _generateDebugInfo
 )
 {
-	ControlFlowSideEffectsCollector sideEffects(_dialect, _block);
+	ControlFlowSideEffectsCollector const sideEffects(_dialect, _block);
 
 	auto controlFlow = std::make_unique<ControlFlow>();
 	controlFlow->functionGraphs.emplace_back(std::make_unique<SSACFG>(
@@ -94,7 +94,6 @@ std::unique_ptr<ControlFlow> SSACFGBuilder::build(
 	transform::eliminateTrivialPhis(mainGraph);
 	return controlFlow;
 }
-
 
 void SSACFGBuilder::buildFunctionGraph(
 	Scope::Function const* _function,
@@ -284,7 +283,7 @@ void SSACFGBuilder::operator()(Switch const& _switch)
 }
 void SSACFGBuilder::operator()(ForLoop const& _loop)
 {
-	ScopedSaveAndRestore scopeRestore(m_scope, m_info.scopes.at(&_loop.pre).get());
+	ScopedSaveAndRestore const scopeRestore(m_scope, m_info.scopes.at(&_loop.pre).get());
 	(*this)(_loop.pre);
 	auto preLoopDebugData = currentBlockDebugData();
 
@@ -292,10 +291,10 @@ void SSACFGBuilder::operator()(ForLoop const& _loop)
 	if (auto const* literalCondition = std::get_if<Literal>(_loop.condition.get()))
 		constantCondition = literalCondition->value.value() != 0;
 
-	SSACFG::BlockId loopCondition = m_graph.makeBlock(debugDataOf(*_loop.condition));
-	SSACFG::BlockId loopBody = m_graph.makeBlock(debugDataOf(_loop.body));
-	SSACFG::BlockId post = m_graph.makeBlock(debugDataOf(_loop.post));
-	SSACFG::BlockId afterLoop = m_graph.makeBlock(preLoopDebugData);
+	SSACFG::BlockId const loopCondition = m_graph.makeBlock(debugDataOf(*_loop.condition));
+	SSACFG::BlockId const loopBody = m_graph.makeBlock(debugDataOf(_loop.body));
+	SSACFG::BlockId const post = m_graph.makeBlock(debugDataOf(_loop.post));
+	SSACFG::BlockId const afterLoop = m_graph.makeBlock(preLoopDebugData);
 
 	class ForLoopInfoScope {
 	public:
@@ -388,7 +387,7 @@ void SSACFGBuilder::registerFunctionDefinition(FunctionDefinition const& _functi
 
 void SSACFGBuilder::operator()(Block const& _block)
 {
-	ScopedSaveAndRestore saveScope(m_scope, m_info.scopes.at(&_block).get());
+	ScopedSaveAndRestore const saveScope(m_scope, m_info.scopes.at(&_block).get());
 	// gather all function definitions so that they are visible to each other's subgraphs
 	static constexpr auto functionDefinitionFilter = ranges::views::filter(
 		[](auto const& _statement) { return std::holds_alternative<FunctionDefinition>(_statement); }
