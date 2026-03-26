@@ -19,8 +19,9 @@
     function mix(arg, value)
     {
         let loc := arg
-        // It should be eliminated, because the location is the same, but if we look at the result, second pass of the
-        // optimizer will eliminate properly first `sstore`.
+        // The first sstore could theoretically be eliminated since loc == arg,
+        // but USE cannot prove this without a known constant value for arg;
+        // a subsequent optimizer pass (after, e.g., CSE resolves the alias) would eliminate it.
         sstore(loc, value)
         let value1 := add(value, 1)
         sstore(arg, value1)
