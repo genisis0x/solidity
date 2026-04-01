@@ -73,7 +73,7 @@ bool LoopInvariantCodeMotion::canBePromoted(
 		for (auto const& ref: VariableReferencesCounter::countReferences(*_varDecl.value))
 			if (_varsDefinedInCurrentScope.count(ref.first) || !m_ssaVariables.count(ref.first))
 				return false;
-		SideEffectsCollector sideEffects{m_dialect, *_varDecl.value, &m_functionSideEffects};
+		SideEffectsCollector const sideEffects{m_dialect, *_varDecl.value, &m_functionSideEffects};
 		if (!sideEffects.movableRelativeTo(_forLoopSideEffects, m_containsMSize))
 			return false;
 	}

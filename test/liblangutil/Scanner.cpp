@@ -187,7 +187,7 @@ BOOST_AUTO_TEST_CASE(string_escapes_legal_before_080)
 
 BOOST_AUTO_TEST_CASE(string_escapes_with_zero)
 {
-	TestScanner scanner("  { \"a\\x61\\x00abc\"");
+	TestScanner const scanner("  { \"a\\x61\\x00abc\"");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::LBrace);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::StringLiteral);
 	BOOST_CHECK_EQUAL(scanner.currentLiteral(), std::string("aa\0abc", 6));
@@ -404,7 +404,7 @@ BOOST_AUTO_TEST_CASE(number_literals_with_trailing_underscore_at_eos)
 
 BOOST_AUTO_TEST_CASE(negative_numbers)
 {
-	TestScanner scanner("var x = -.2 + -0x78 + -7.3 + 8.9 + 2e-2;");
+	TestScanner const scanner("var x = -.2 + -0x78 + -7.3 + 8.9 + 2e-2;");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::Var);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::Identifier);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::Assign);
@@ -431,7 +431,7 @@ BOOST_AUTO_TEST_CASE(negative_numbers)
 
 BOOST_AUTO_TEST_CASE(locations)
 {
-	TestScanner scanner("function_identifier has ; -0x743/*comment*/\n ident //comment");
+	TestScanner const scanner("function_identifier has ; -0x743/*comment*/\n ident //comment");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::Identifier);
 	BOOST_CHECK_EQUAL(scanner.currentLocation().start, 0);
 	BOOST_CHECK_EQUAL(scanner.currentLocation().end, 19);
@@ -454,7 +454,7 @@ BOOST_AUTO_TEST_CASE(locations)
 BOOST_AUTO_TEST_CASE(ambiguities)
 {
 	// test scanning of some operators which need look-ahead
-	TestScanner scanner("<=" "<" "+ +=a++ =>" "<<" ">>" " >>=" ">>>" ">>>=" " >>>>>=><<=");
+	TestScanner const scanner("<=" "<" "+ +=a++ =>" "<<" ">>" " >>=" ">>>" ">>>=" " >>>>>=><<=");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::LessThanOrEqual);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::LessThan);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::Add);
@@ -476,21 +476,21 @@ BOOST_AUTO_TEST_CASE(ambiguities)
 
 BOOST_AUTO_TEST_CASE(documentation_comments_parsed_begin)
 {
-	TestScanner scanner("/// Send $(value / 1000) chocolates to the user");
+	TestScanner const scanner("/// Send $(value / 1000) chocolates to the user");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::EOS);
 	BOOST_CHECK_EQUAL(scanner.currentCommentLiteral(), "Send $(value / 1000) chocolates to the user");
 }
 
 BOOST_AUTO_TEST_CASE(multiline_documentation_comments_parsed_begin)
 {
-	TestScanner scanner("/** Send $(value / 1000) chocolates to the user*/");
+	TestScanner const scanner("/** Send $(value / 1000) chocolates to the user*/");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::EOS);
 	BOOST_CHECK_EQUAL(scanner.currentCommentLiteral(), "Send $(value / 1000) chocolates to the user");
 }
 
 BOOST_AUTO_TEST_CASE(documentation_comments_parsed)
 {
-	TestScanner scanner("some other tokens /// Send $(value / 1000) chocolates to the user");
+	TestScanner const scanner("some other tokens /// Send $(value / 1000) chocolates to the user");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::Identifier);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::Identifier);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::Identifier);
@@ -500,7 +500,7 @@ BOOST_AUTO_TEST_CASE(documentation_comments_parsed)
 
 BOOST_AUTO_TEST_CASE(multiline_documentation_comments_parsed)
 {
-	TestScanner scanner("some other tokens /**\n"
+	TestScanner const scanner("some other tokens /**\n"
 						"* Send $(value / 1000) chocolates to the user\n"
 						"*/");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::Identifier);
@@ -512,7 +512,7 @@ BOOST_AUTO_TEST_CASE(multiline_documentation_comments_parsed)
 
 BOOST_AUTO_TEST_CASE(multiline_documentation_no_stars)
 {
-	TestScanner scanner("some other tokens /**\n"
+	TestScanner const scanner("some other tokens /**\n"
 						" Send $(value / 1000) chocolates to the user\n"
 						"*/");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::Identifier);
@@ -524,7 +524,7 @@ BOOST_AUTO_TEST_CASE(multiline_documentation_no_stars)
 
 BOOST_AUTO_TEST_CASE(multiline_documentation_whitespace_hell)
 {
-	TestScanner scanner("some other tokens /** \t \r \n"
+	TestScanner const scanner("some other tokens /** \t \r \n"
 						"\t \r  * Send $(value / 1000) chocolates to the user\n"
 						"*/");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::Identifier);
@@ -536,35 +536,35 @@ BOOST_AUTO_TEST_CASE(multiline_documentation_whitespace_hell)
 
 BOOST_AUTO_TEST_CASE(comment_before_eos)
 {
-	TestScanner scanner("//");
+	TestScanner const scanner("//");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::EOS);
 	BOOST_CHECK_EQUAL(scanner.currentCommentLiteral(), "");
 }
 
 BOOST_AUTO_TEST_CASE(documentation_comment_before_eos)
 {
-	TestScanner scanner("///");
+	TestScanner const scanner("///");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::EOS);
 	BOOST_CHECK_EQUAL(scanner.currentCommentLiteral(), "");
 }
 
 BOOST_AUTO_TEST_CASE(empty_multiline_comment)
 {
-	TestScanner scanner("/**/");
+	TestScanner const scanner("/**/");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::EOS);
 	BOOST_CHECK_EQUAL(scanner.currentCommentLiteral(), "");
 }
 
 BOOST_AUTO_TEST_CASE(empty_multiline_documentation_comment_before_eos)
 {
-	TestScanner scanner("/***/");
+	TestScanner const scanner("/***/");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::EOS);
 	BOOST_CHECK_EQUAL(scanner.currentCommentLiteral(), "");
 }
 
 BOOST_AUTO_TEST_CASE(comments_mixed_in_sequence)
 {
-	TestScanner scanner("hello_world ///documentation comment \n"
+	TestScanner const scanner("hello_world ///documentation comment \n"
 						"//simple comment \n"
 						"<<");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::Identifier);
@@ -574,7 +574,7 @@ BOOST_AUTO_TEST_CASE(comments_mixed_in_sequence)
 
 BOOST_AUTO_TEST_CASE(ether_subdenominations)
 {
-	TestScanner scanner("wei gwei ether");
+	TestScanner const scanner("wei gwei ether");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::SubWei);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::SubGwei);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::SubEther);
@@ -582,7 +582,7 @@ BOOST_AUTO_TEST_CASE(ether_subdenominations)
 
 BOOST_AUTO_TEST_CASE(time_subdenominations)
 {
-	TestScanner scanner("seconds minutes hours days weeks years");
+	TestScanner const scanner("seconds minutes hours days weeks years");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::SubSecond);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::SubMinute);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::SubHour);
@@ -593,7 +593,7 @@ BOOST_AUTO_TEST_CASE(time_subdenominations)
 
 BOOST_AUTO_TEST_CASE(empty_comment)
 {
-	TestScanner scanner("//\ncontract{}");
+	TestScanner const scanner("//\ncontract{}");
 	BOOST_CHECK_EQUAL(scanner.currentCommentLiteral(), "");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::Contract);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::LBrace);
@@ -605,7 +605,7 @@ BOOST_AUTO_TEST_CASE(empty_comment)
 
 BOOST_AUTO_TEST_CASE(valid_unicode_string_escape)
 {
-	TestScanner scanner("{ \"\\u00DAnicode\"");
+	TestScanner const scanner("{ \"\\u00DAnicode\"");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::LBrace);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::StringLiteral);
 	BOOST_CHECK_EQUAL(scanner.currentLiteral(), std::string("\xC3\x9Anicode", 8));
@@ -613,7 +613,7 @@ BOOST_AUTO_TEST_CASE(valid_unicode_string_escape)
 
 BOOST_AUTO_TEST_CASE(valid_unicode_string_escape_7f)
 {
-	TestScanner scanner("{ \"\\u007Fnicode\"");
+	TestScanner const scanner("{ \"\\u007Fnicode\"");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::LBrace);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::StringLiteral);
 	BOOST_CHECK_EQUAL(scanner.currentLiteral(), std::string("\x7Fnicode", 7));
@@ -621,7 +621,7 @@ BOOST_AUTO_TEST_CASE(valid_unicode_string_escape_7f)
 
 BOOST_AUTO_TEST_CASE(valid_unicode_string_escape_7ff)
 {
-	TestScanner scanner("{ \"\\u07FFnicode\"");
+	TestScanner const scanner("{ \"\\u07FFnicode\"");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::LBrace);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::StringLiteral);
 	BOOST_CHECK_EQUAL(scanner.currentLiteral(), std::string("\xDF\xBFnicode", 8));
@@ -629,7 +629,7 @@ BOOST_AUTO_TEST_CASE(valid_unicode_string_escape_7ff)
 
 BOOST_AUTO_TEST_CASE(valid_unicode_string_escape_ffff)
 {
-	TestScanner scanner("{ \"\\uFFFFnicode\"");
+	TestScanner const scanner("{ \"\\uFFFFnicode\"");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::LBrace);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::StringLiteral);
 	BOOST_CHECK_EQUAL(scanner.currentLiteral(), std::string("\xEF\xBF\xBFnicode", 9));
@@ -637,7 +637,7 @@ BOOST_AUTO_TEST_CASE(valid_unicode_string_escape_ffff)
 
 BOOST_AUTO_TEST_CASE(invalid_short_unicode_string_escape)
 {
-	TestScanner scanner("{ \"\\uFFnicode\"");
+	TestScanner const scanner("{ \"\\uFFnicode\"");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::LBrace);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::Illegal);
 }
@@ -659,7 +659,7 @@ BOOST_AUTO_TEST_CASE(unicode_prefix_only)
 
 BOOST_AUTO_TEST_CASE(unicode_invalid_space)
 {
-	TestScanner scanner("{ unicode ");
+	TestScanner const scanner("{ unicode ");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::LBrace);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::Illegal);
 	BOOST_CHECK_EQUAL(scanner.currentError(), ScannerError::IllegalToken);
@@ -682,7 +682,7 @@ BOOST_AUTO_TEST_CASE(unicode_invalid_token)
 
 BOOST_AUTO_TEST_CASE(valid_unicode_literal)
 {
-	TestScanner scanner("{ unicode\"Hello 😃\"");
+	TestScanner const scanner("{ unicode\"Hello 😃\"");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::LBrace);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::UnicodeStringLiteral);
 	BOOST_CHECK_EQUAL(scanner.currentLiteral(), std::string("Hello \xf0\x9f\x98\x83", 10));
@@ -691,7 +691,7 @@ BOOST_AUTO_TEST_CASE(valid_unicode_literal)
 BOOST_AUTO_TEST_CASE(valid_nonprintable_in_unicode_literal)
 {
 	// Non-printable characters are allowed in unicode strings...
-	TestScanner scanner("{ unicode\"Hello \007😃\"");
+	TestScanner const scanner("{ unicode\"Hello \007😃\"");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::LBrace);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::UnicodeStringLiteral);
 	BOOST_CHECK_EQUAL(scanner.currentLiteral(), std::string("Hello \x07\xf0\x9f\x98\x83", 11));
@@ -713,7 +713,7 @@ BOOST_AUTO_TEST_CASE(hex_prefix_only)
 
 BOOST_AUTO_TEST_CASE(hex_invalid_space)
 {
-	TestScanner scanner("{ hex ");
+	TestScanner const scanner("{ hex ");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::LBrace);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::Illegal);
 	BOOST_CHECK_EQUAL(scanner.currentError(), ScannerError::IllegalToken);
@@ -734,7 +734,7 @@ BOOST_AUTO_TEST_CASE(hex_invalid_token)
 
 BOOST_AUTO_TEST_CASE(valid_hex_literal)
 {
-	TestScanner scanner("{ hex\"00112233FF\"");
+	TestScanner const scanner("{ hex\"00112233FF\"");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::LBrace);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::HexStringLiteral);
 	BOOST_CHECK_EQUAL(scanner.currentLiteral(), std::string("\x00\x11\x22\x33\xFF", 5));
@@ -742,7 +742,7 @@ BOOST_AUTO_TEST_CASE(valid_hex_literal)
 
 BOOST_AUTO_TEST_CASE(invalid_short_hex_literal)
 {
-	TestScanner scanner("{ hex\"00112233F\"");
+	TestScanner const scanner("{ hex\"00112233F\"");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::LBrace);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::Illegal);
 	BOOST_CHECK_EQUAL(scanner.currentError(), ScannerError::IllegalHexString);
@@ -750,7 +750,7 @@ BOOST_AUTO_TEST_CASE(invalid_short_hex_literal)
 
 BOOST_AUTO_TEST_CASE(invalid_hex_literal_with_space)
 {
-	TestScanner scanner("{ hex\"00112233FF \"");
+	TestScanner const scanner("{ hex\"00112233FF \"");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::LBrace);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::Illegal);
 	BOOST_CHECK_EQUAL(scanner.currentError(), ScannerError::IllegalHexString);
@@ -758,7 +758,7 @@ BOOST_AUTO_TEST_CASE(invalid_hex_literal_with_space)
 
 BOOST_AUTO_TEST_CASE(invalid_hex_literal_with_wrong_quotes)
 {
-	TestScanner scanner("{ hex\"00112233FF'");
+	TestScanner const scanner("{ hex\"00112233FF'");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::LBrace);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::Illegal);
 	BOOST_CHECK_EQUAL(scanner.currentError(), ScannerError::IllegalHexString);
@@ -766,7 +766,7 @@ BOOST_AUTO_TEST_CASE(invalid_hex_literal_with_wrong_quotes)
 
 BOOST_AUTO_TEST_CASE(invalid_hex_literal_nonhex_string)
 {
-	TestScanner scanner("{ hex\"hello\"");
+	TestScanner const scanner("{ hex\"hello\"");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::LBrace);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::Illegal);
 	BOOST_CHECK_EQUAL(scanner.currentError(), ScannerError::IllegalHexString);
@@ -777,7 +777,7 @@ BOOST_AUTO_TEST_CASE(invalid_hex_literal_nonhex_string)
 BOOST_AUTO_TEST_CASE(invalid_multiline_comment_close)
 {
 	// This used to parse as "comment", "identifier"
-	TestScanner scanner("/** / x");
+	TestScanner const scanner("/** / x");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::Illegal);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::EOS);
 }
@@ -785,14 +785,14 @@ BOOST_AUTO_TEST_CASE(invalid_multiline_comment_close)
 BOOST_AUTO_TEST_CASE(multiline_doc_comment_at_eos)
 {
 	// This used to parse as "whitespace"
-	TestScanner scanner("/**");
+	TestScanner const scanner("/**");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::Illegal);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::EOS);
 }
 
 BOOST_AUTO_TEST_CASE(multiline_comment_at_eos)
 {
-	TestScanner scanner("/*");
+	TestScanner const scanner("/*");
 	BOOST_CHECK_EQUAL(scanner.currentToken(), Token::Illegal);
 	BOOST_CHECK_EQUAL(scanner.next(), Token::EOS);
 }
@@ -801,7 +801,7 @@ BOOST_AUTO_TEST_CASE(regular_line_break_in_single_line_comment)
 {
 	for (auto const& nl: {"\r", "\n", "\r\n"})
 	{
-		TestScanner scanner("// abc " + std::string(nl) + " def ");
+		TestScanner const scanner("// abc " + std::string(nl) + " def ");
 		BOOST_CHECK_EQUAL(scanner.currentCommentLiteral(), "");
 		BOOST_CHECK_EQUAL(scanner.currentToken(), Token::Identifier);
 		BOOST_CHECK_EQUAL(scanner.currentLiteral(), "def");
@@ -813,7 +813,7 @@ BOOST_AUTO_TEST_CASE(irregular_line_breaks_in_single_line_comment)
 {
 	for (auto const& nl: {"\v", "\f", "\xE2\x80\xA8", "\xE2\x80\xA9"})
 	{
-		TestScanner scanner("// abc " + std::string(nl) + " def ");
+		TestScanner const scanner("// abc " + std::string(nl) + " def ");
 		BOOST_CHECK_EQUAL(scanner.currentCommentLiteral(), "");
 		BOOST_CHECK_EQUAL(scanner.currentToken(), Token::Illegal);
 		for (size_t i = 0; i < std::string(nl).size() - 1; i++)
@@ -828,7 +828,7 @@ BOOST_AUTO_TEST_CASE(regular_line_breaks_in_single_line_doc_comment)
 {
 	for (auto const& nl: {"\r", "\n", "\r\n"})
 	{
-		TestScanner scanner("/// abc " + std::string(nl) + " def ");
+		TestScanner const scanner("/// abc " + std::string(nl) + " def ");
 		BOOST_CHECK_EQUAL(scanner.currentCommentLiteral(), "abc ");
 		BOOST_CHECK_EQUAL(scanner.currentToken(), Token::Identifier);
 		BOOST_CHECK_EQUAL(scanner.currentLiteral(), "def");
@@ -842,7 +842,7 @@ BOOST_AUTO_TEST_CASE(regular_line_breaks_in_multiline_doc_comment)
 	// Any accepted non-LF is being canonicalized to LF.
 	for (auto const& nl : {"\r"s, "\n"s, "\r\n"s})
 	{
-		TestScanner scanner{"/// Hello" + nl + "/// World" + nl + "ident"};
+		TestScanner const scanner{"/// Hello" + nl + "/// World" + nl + "ident"};
 		auto const& lit = scanner.currentCommentLiteral();
 		BOOST_CHECK_EQUAL(lit, "Hello\n World");
 		BOOST_CHECK_EQUAL(scanner.currentCommentLiteral(), "Hello\n World");
@@ -856,7 +856,7 @@ BOOST_AUTO_TEST_CASE(irregular_line_breaks_in_single_line_doc_comment)
 {
 	for (auto const& nl: {"\v", "\f", "\xE2\x80\xA8", "\xE2\x80\xA9"})
 	{
-		TestScanner scanner("/// abc " + std::string(nl) + " def ");
+		TestScanner const scanner("/// abc " + std::string(nl) + " def ");
 		BOOST_CHECK_EQUAL(scanner.currentCommentLiteral(), "abc ");
 		BOOST_CHECK_EQUAL(scanner.currentToken(), Token::Illegal);
 		for (size_t i = 0; i < std::string(nl).size() - 1; i++)
@@ -871,7 +871,7 @@ BOOST_AUTO_TEST_CASE(regular_line_breaks_in_strings)
 {
 	for (auto const& nl: {"\r"s, "\n"s, "\r\n"s})
 	{
-		TestScanner scanner("\"abc " + nl + " def\"");
+		TestScanner const scanner("\"abc " + nl + " def\"");
 		BOOST_CHECK_EQUAL(scanner.currentToken(), Token::Illegal);
 		BOOST_CHECK_EQUAL(scanner.next(), Token::Identifier);
 		BOOST_CHECK_EQUAL(scanner.currentLiteral(), "def");
@@ -884,7 +884,7 @@ BOOST_AUTO_TEST_CASE(irregular_line_breaks_in_strings)
 {
 	for (auto const& nl: {"\v", "\f", "\xE2\x80\xA8", "\xE2\x80\xA9"})
 	{
-		TestScanner scanner("\"abc " + std::string(nl) + " def\"");
+		TestScanner const scanner("\"abc " + std::string(nl) + " def\"");
 		BOOST_CHECK_EQUAL(scanner.currentToken(), Token::Illegal);
 		for (size_t i = 0; i < std::string(nl).size(); i++)
 			BOOST_CHECK_EQUAL(scanner.next(), Token::Illegal);
