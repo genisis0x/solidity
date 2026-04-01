@@ -229,7 +229,7 @@ bool TypeInference::visit(TypeClassDefinition const& _typeClassDefinition)
 
 	auto& typeMembersAnnotation = annotation().members[typeConstructor(&_typeClassDefinition)];
 
-	for (auto subNode: _typeClassDefinition.subNodes())
+	for (const auto& subNode: _typeClassDefinition.subNodes())
 	{
 		subNode->accept(*this);
 		auto const* functionDefinition = dynamic_cast<FunctionDefinition const*>(subNode.get());
@@ -246,7 +246,7 @@ bool TypeInference::visit(TypeClassDefinition const& _typeClassDefinition)
 
 	annotation().typeClassFunctions[typeClass] = std::move(functionTypes);
 
-	for (auto [functionName, functionType]: functionTypes)
+	for (const auto& [functionName, functionType]: functionTypes)
 	{
 		TypeEnvironmentHelpers const helper{*m_env};
 		auto typeVars = helper.typeVars(functionType);
@@ -614,7 +614,7 @@ void TypeInference::endVisit(TupleExpression const& _tupleExpression)
 	case ExpressionContext::Sort:
 	{
 		Type const type = m_typeSystem.freshTypeVariable({});
-		for (auto componentType: componentTypes)
+		for (const auto& componentType: componentTypes)
 			unify(type, componentType, _tupleExpression.location());
 		expressionAnnotation.type = type;
 		break;
@@ -693,7 +693,7 @@ bool TypeInference::visit(TypeClassInstantiation const& _typeClassInstantiation)
 
 	std::map<std::string, Type> functionTypes;
 
-	for (auto subNode: _typeClassInstantiation.subNodes())
+	for (const auto& subNode: _typeClassInstantiation.subNodes())
 	{
 		auto const* functionDefinition = dynamic_cast<FunctionDefinition const*>(subNode.get());
 		solAssert(functionDefinition);
@@ -710,7 +710,7 @@ bool TypeInference::visit(TypeClassInstantiation const& _typeClassInstantiation)
 	solAssert(std::holds_alternative<TypeVariable>(m_typeSystem.typeClassVariable(typeClass)));
 	TypeVariable classVar = std::get<TypeVariable>(m_typeSystem.typeClassVariable(typeClass));
 
-	for (auto [name, classFunctionType]: classFunctions)
+	for (const auto& [name, classFunctionType]: classFunctions)
 	{
 		if (!functionTypes.count(name))
 		{
@@ -799,7 +799,7 @@ bool TypeInference::visit(TypeDefinition const& _typeDefinition)
 
 	std::vector<Type> arguments;
 	if (_typeDefinition.arguments())
-		for (ASTPointer<VariableDeclaration> const argumentDeclaration: _typeDefinition.arguments()->parameters())
+		for (ASTPointer<VariableDeclaration> const& argumentDeclaration: _typeDefinition.arguments()->parameters())
 		{
 			solAssert(argumentDeclaration);
 			Type const typeVar = type(*argumentDeclaration);
@@ -860,7 +860,7 @@ void TypeInference::endVisit(FunctionCall const& _functionCall)
 
 	TypeSystemHelpers const helper{m_typeSystem};
 	std::vector<Type> argTypes;
-	for (auto arg: _functionCall.arguments())
+	for (const auto& arg: _functionCall.arguments())
 	{
 		switch (m_expressionContext)
 		{
@@ -1125,7 +1125,7 @@ void TypeInference::unify(Type _a, Type _b, langutil::SourceLocation _location)
 					if (helper.isTypeConstant(sortMismatch->type))
 					{
 						TypeConstructor const constructor = std::get<0>(helper.destTypeConstant(sortMismatch->type));
-						for (auto typeClass: sortMismatch->sort.classes)
+						for (const auto& typeClass: sortMismatch->sort.classes)
 						{
 							if (auto const* instantiation = util::valueOrDefault(typeClassInstantiations(m_analysis, typeClass), constructor, nullptr))
 							{

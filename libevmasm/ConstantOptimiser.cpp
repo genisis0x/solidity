@@ -45,7 +45,7 @@ unsigned ConstantOptimisationMethod::optimiseConstants(
 			if (item.type() == Push)
 				pushes[item]++;
 		std::map<u256, AssemblyItems> pendingReplacements;
-		for (auto it: pushes)
+		for (const auto& it: pushes)
 		{
 			AssemblyItem const& item = it.first;
 			if (item.data() < 0x100)

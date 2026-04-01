@@ -68,7 +68,7 @@ TestCase::TestResult YulInterpreterTest::run(std::ostream& _stream, std::string 
 	return checkResult(_stream, _linePrefix, _formatted);
 }
 
-std::string YulInterpreterTest::interpret(std::shared_ptr<Object const> const& _object)
+std::string YulInterpreterTest::interpret(std::shared_ptr<Object const> const& _object) const
 {
 	solAssert(_object && _object->hasCode());
 

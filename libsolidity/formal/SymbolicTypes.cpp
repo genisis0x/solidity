@@ -179,7 +179,7 @@ SortPointer smtSort(frontend::Type const& _type)
 		{
 			solAssert(!structType->recursive(), "");
 			auto const& structMembers = structType->structDefinition().members();
-			for (auto member: structMembers)
+			for (const auto& member: structMembers)
 				members.emplace_back(tupleName + "_accessor_" + member->name());
 			sorts = smtSortAbstractFunction(applyMap(
 				structMembers,

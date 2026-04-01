@@ -729,7 +729,7 @@ std::map<std::string, Json> CommandLineInterface::parseAstFromInput()
 	return sourceJsons;
 }
 
-void CommandLineInterface::createFile(std::string const& _fileName, std::string const& _data)
+void CommandLineInterface::createFile(std::string const& _fileName, std::string const& _data) const
 {
 	namespace fs = boost::filesystem;
 

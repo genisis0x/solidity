@@ -292,7 +292,7 @@ void ControlFlowGraph::gatherKnowledge()
 				}
 			}
 			else
-				for (auto tag: tags)
+				for (const auto& tag: tags)
 					addWorkQueueItem(item, BlockId(tag), state);
 		}
 		else if (block.begin <= pc && pc < block.end)
@@ -327,7 +327,7 @@ BasicBlocks ControlFlowGraph::rebuildCode()
 				pushes[ref]++;
 
 	std::set<BlockId> blocksToAdd;
-	for (auto it: m_blocks)
+	for (const auto& it: m_blocks)
 		blocksToAdd.insert(it.first);
 	std::set<BlockId> blocksAdded;
 	BasicBlocks blocks;

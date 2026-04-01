@@ -159,7 +159,7 @@ bool ExpressionClasses::knownToBeDifferentBy32(ExpressionClasses::Id _a, Express
 	return v && *v + 31 > u256(62);
 }
 
-bool ExpressionClasses::knownZero(Id _c)
+bool ExpressionClasses::knownZero(Id _c) const
 {
 	return Pattern(u256(0)).matches(representative(_c), *this);
 }
@@ -169,7 +169,7 @@ bool ExpressionClasses::knownNonZero(Id _c)
 	return Pattern(u256(0)).matches(representative(find(Instruction::ISZERO, {_c})), *this);
 }
 
-u256 const* ExpressionClasses::knownConstant(Id _c)
+u256 const* ExpressionClasses::knownConstant(Id _c) const
 {
 	std::map<unsigned, Expression const*> matchGroups;
 	Pattern constant(Push);

@@ -158,12 +158,12 @@ struct TestScanner
 		scanner = std::make_unique<Scanner>(*stream);
 	}
 
-	decltype(auto) currentToken() { return scanner->currentToken(); }
-	decltype(auto) next() { return scanner->next(); }
-	decltype(auto) currentError() { return scanner->currentError(); }
-	decltype(auto) currentLiteral() { return scanner->currentLiteral(); }
-	decltype(auto) currentCommentLiteral() { return scanner->currentCommentLiteral(); }
-	decltype(auto) currentLocation() { return scanner->currentLocation(); }
+	decltype(auto) currentToken() const { return scanner->currentToken(); }
+	decltype(auto) next() const { return scanner->next(); }
+	decltype(auto) currentError() const { return scanner->currentError(); }
+	decltype(auto) currentLiteral() const { return scanner->currentLiteral(); }
+	decltype(auto) currentCommentLiteral() const { return scanner->currentCommentLiteral(); }
+	decltype(auto) currentLocation() const { return scanner->currentLocation(); }
 };
 
 BOOST_AUTO_TEST_CASE(string_escapes_legal_before_080)

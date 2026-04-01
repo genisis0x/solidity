@@ -532,7 +532,7 @@ void CompilerContext::appendInlineAssembly(
 }
 
 
-void CompilerContext::optimizeYul(yul::Object& _object, OptimiserSettings const& _optimiserSettings, std::set<yul::YulName> const& _externalIdentifiers)
+void CompilerContext::optimizeYul(yul::Object& _object, OptimiserSettings const& _optimiserSettings, std::set<yul::YulName> const& _externalIdentifiers) const
 {
 	yulAssert(_object.dialect());
 	auto const* evmDialect = dynamic_cast<yul::EVMDialect const*>(_object.dialect());

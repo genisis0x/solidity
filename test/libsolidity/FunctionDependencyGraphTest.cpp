@@ -51,7 +51,7 @@ TestCase::TestResult FunctionDependencyGraphTest::run(std::ostream& _stream, std
 	}
 
 	m_obtainedResult.clear();
-	for (auto [top, subs]: compiler().experimentalAnalysis().annotation<experimental::FunctionDependencyAnalysis>().functionCallGraph.edges)
+	for (const auto& [top, subs]: compiler().experimentalAnalysis().annotation<experimental::FunctionDependencyAnalysis>().functionCallGraph.edges)
 	{
 		std::string const topName = top->name().empty() ? "fallback" : top->name();
 		m_obtainedResult += "(" + topName + ") --> {";
