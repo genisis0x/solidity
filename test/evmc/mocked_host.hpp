@@ -356,7 +356,7 @@ public:
         if (it == accounts.end())
             return 0;
 
-        const auto& code = it->second.code;
+        auto const& code = it->second.code;
 
         if (code_offset >= code.size())
             return 0;
@@ -395,7 +395,7 @@ public:
             if (call_msg.input_size > 0)
             {
                 m_recorded_calls_inputs.emplace_back(call_msg.input_data, call_msg.input_size);
-                const auto& input_copy = m_recorded_calls_inputs.back();
+                auto const& input_copy = m_recorded_calls_inputs.back();
                 call_msg.input_data = input_copy.data();
             }
         }

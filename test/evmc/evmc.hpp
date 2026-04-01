@@ -767,7 +767,7 @@ inline VM::VM(evmc_vm* vm,
   : m_instance{vm}
 {
     // This constructor is implemented outside of the class definition to workaround a doxygen bug.
-    for (const auto& option : options)
+    for (auto const& option : options)
         set_option(option.first, option.second);
 }
 

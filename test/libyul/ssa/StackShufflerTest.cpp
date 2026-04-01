@@ -273,7 +273,7 @@ public:
 			return;
 
 		size_t maxStackDepth = 0;
-		for (const auto& [operation, stackAfter]: m_entries)
+		for (auto const& [operation, stackAfter]: m_entries)
 			maxStackDepth = std::max(maxStackDepth, stackAfter.size());
 
 		if (maxStackDepth == 0)
@@ -450,7 +450,7 @@ explicitly provided.)";
 		yulAssert(*testConfig.targetStackSize >= testConfig.targetStackTop->size());
 		auto const tailSize = *testConfig.targetStackSize - testConfig.targetStackTop->size();
 		yulAssert(stackData.size() == *testConfig.targetStackSize);
-		for (const auto& valueID: testConfig.targetStackTailSet | ranges::views::keys)
+		for (auto const& valueID: testConfig.targetStackTailSet | ranges::views::keys)
 		{
 			auto const findIt = ranges::find(
 				stackData.begin(),
