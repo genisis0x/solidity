@@ -229,15 +229,8 @@ Example:
 
 See [this issue](https://stackoverflow.com/questions/614302/c-header-order/614333#614333 "C header order") for the reason: this makes it easier to find missing includes in header files.
 
-## 13. Recommended reading
+## 13. Const correctness
 
-- Herb Sutter and Bjarne Stroustrup:
-  - [C++ Core Guidelines](https://github.com/isocpp/CppCoreGuidelines/blob/master/CppCoreGuidelines.md)
-
-- Herb Sutter and Andrei Alexandrescu:
-  - "C++ Coding Standards: 101 Rules, Guidelines, and Best Practices"
-
-- Scott Meyers:
-  - "Effective C++: 55 Specific Ways to Improve Your Programs and Designs (3rd Edition)"
-  - "More Effective C++: 35 New Ways to Improve Your Programs and Designs"
-  - "Effective Modern C++: 42 Specific Ways to Improve Your Use of C++11 and C++14"
+1. Use `const` for local variables and references that are not modified after initialization.
+2. Use `auto const&` in range-based for loops over non-trivial types whenever possible, to avoid unnecessary copies.
+3. Mark member functions `const` when they do not modify object state.
