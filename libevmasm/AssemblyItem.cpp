@@ -114,7 +114,6 @@ std::pair<std::string, std::string> AssemblyItem::nameAndData(langutil::EVMVersi
 void AssemblyItem::setPushTagSubIdAndTag(SubAssemblyID _subId, size_t _tag)
 {
 	solAssert(m_type == PushTag || m_type == Tag);
-	solAssert(!_subId.empty());
 	u256 data = _tag;
 	if (!_subId.empty())
 		data |= (u256(_subId.value) + 1) << 64;

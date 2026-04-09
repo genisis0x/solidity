@@ -527,8 +527,6 @@ void CommandLineParser::parseOutputSelection()
 			"The following outputs are not supported in " + g_inputModeName.at(m_options.input.mode) + " mode: " +
 			joinOptionNames(unsupportedOutputs) + "."
 		);
-
-	// TODO: restrict EOF version to correct EVM version.
 }
 
 po::options_description CommandLineParser::optionsDescription()

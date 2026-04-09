@@ -376,14 +376,16 @@ void OptimizedEVMCodeTransform::appendSwap(size_t _depth)
 {
 	if (_depth <= 16)
 		m_assembly.appendInstruction(evmasm::swapInstruction(static_cast<unsigned>(_depth)));
-	yulAssert(false, "Unreachable stack depth");
+	else
+		yulAssert(false, "Unreachable stack depth");
 }
 
 void OptimizedEVMCodeTransform::appendDup(size_t _depth)
 {
 	if (_depth <= 16)
 		m_assembly.appendInstruction(evmasm::dupInstruction(static_cast<unsigned>(_depth)));
-	yulAssert(false, "Unreachable stack depth");
+	else
+		yulAssert(false, "Unreachable stack depth");
 }
 
 void OptimizedEVMCodeTransform::operator()(CFG::BasicBlock const& _block)

@@ -484,54 +484,8 @@ size_t AsmAnalyzer::operator()(FunctionCall const& _funCall)
 							"The \"verbatim_*\" builtins cannot be used with empty bytecode."
 						);
 				}
-				else if (functionName == "eofcreate" || functionName == "returncontract")
-				{
-					auto const& argumentAsLiteral = std::get<Literal>(arg);
-					auto const formattedLiteral = formatLiteral(argumentAsLiteral);
-
-					if (util::contains(formattedLiteral, '.'))
-						m_errorReporter.typeError(
-							2186_error,
-							nativeLocationOf(arg),
-							fmt::format("Name required but path given as \"{}\" argument.", functionName)
-						);
-
-					if (!m_objectStructure.topLevelSubObjectNames().count(formattedLiteral))
-					{
-						if (m_objectStructure.containsData(formattedLiteral))
-							m_errorReporter.typeError(
-								7575_error,
-								nativeLocationOf(arg),
-								fmt::format(
-									"Data name \"{}\" cannot be used as an argument of eofcreate/returncontract. "
-									"Only an object name is acceptable.",
-									formattedLiteral
-								)
-							);
-						else
-							m_errorReporter.typeError(
-								8970_error,
-								nativeLocationOf(arg),
-								fmt::format("Unknown object \"{}\".", formattedLiteral)
-							);
-					}
-				}
 				expectUnlimitedStringLiteral(std::get<Literal>(arg));
 				continue;
-			}
-			else if (*literalArgumentKind == LiteralKind::Number)
-			{
-				std::string_view functionName = resolveFunctionName(_funCall.functionName, m_dialect);
-				if (functionName == "auxdataloadn")
-				{
-					auto const& argumentAsLiteral = std::get<Literal>(arg);
-					if (argumentAsLiteral.value.value() > std::numeric_limits<uint16_t>::max())
-						m_errorReporter.typeError(
-							5202_error,
-							nativeLocationOf(arg),
-							"Invalid auxdataloadn argument value. Offset must be in range 0...0xFFFF"
-						);
-				}
 			}
 		}
 		expectExpression(arg);
