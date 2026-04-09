@@ -952,19 +952,12 @@ void IRGenerator::generateConstructors(ContractDefinition const& _contract)
 std::string IRGenerator::deployCode(ContractDefinition const& _contract)
 {
 	Whiskers t(R"X(
-		<?eof>
-			<?library>
-				mstore(<libraryAddressImmutableOffset>, address())
-			</library>
-			returncontract("<object>", <auxDataStart>, <auxDataSize>)
-		<!eof>
-			let <codeOffset> := <allocateUnbounded>()
-			codecopy(<codeOffset>, dataoffset("<object>"), datasize("<object>"))
-			<#immutables>
-				setimmutable(<codeOffset>, "<immutableName>", <value>)
-			</immutables>
-			return(<codeOffset>, datasize("<object>"))
-		</eof>
+		let <codeOffset> := <allocateUnbounded>()
+		codecopy(<codeOffset>, dataoffset("<object>"), datasize("<object>"))
+		<#immutables>
+			setimmutable(<codeOffset>, "<immutableName>", <value>)
+		</immutables>
+		return(<codeOffset>, datasize("<object>"))
 	)X");
 	t("allocateUnbounded", m_utils.allocateUnboundedFunction());
 	t("codeOffset", m_context.newYulVariable());
