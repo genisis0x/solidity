@@ -146,7 +146,7 @@ void EVMVersionRestrictedTestCase::processEVMVersionSetting()
 
 void EVMVersionRestrictedTestCase::processBytecodeFormatSetting()
 {
-	std::string bytecodeFormatString = m_reader.stringSetting("bytecodeFormat", "legacy,>=EOFv1");
+	std::string bytecodeFormatString = m_reader.stringSetting("bytecodeFormat", "legacy");
 	if (bytecodeFormatString == "legacy")
 		return;
 
