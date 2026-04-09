@@ -2670,6 +2670,7 @@ void IRGeneratorForStatements::appendExternalFunctionCall(
 		let <pos> := <allocateUnbounded>()
 		mstore(<pos>, <shl28>(<funSel>))
 		let <end> := <encodeArgs>(add(<pos>, 4) <argumentString>)
+
 		let <success> := <call>(<gas>, <address>, <?hasValue> <value>, </hasValue> <pos>, sub(<end>, <pos>), <pos>, <staticReturndataSize>)
 		<?noTryCall>
 			if iszero(<success>) { <forwardingRevert>() }
@@ -2810,7 +2811,9 @@ void IRGeneratorForStatements::appendBareCall(
 			let <pos> := add(<arg>, 0x20)
 			let <length> := mload(<arg>)
 		</needsEncoding>
-			let <success> := <call>(<gas>, <address>, <?+value> <value>, </+value> <pos>, <length>, 0, 0)
+
+		let <success> := <call>(<gas>, <address>, <?+value> <value>, </+value> <pos>, <length>, 0, 0)
+
 		let <returndataVar> := <extractReturndataFunction>()
 	)");
 

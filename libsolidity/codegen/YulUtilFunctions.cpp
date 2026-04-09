@@ -4778,11 +4778,11 @@ std::string YulUtilFunctions::copyConstructorArgumentsToMemoryFunction(
 
 		return util::Whiskers(R"(
 			function <functionName>() -> <retParams> {
-					let programSize := datasize("<object>")
-					let argSize := sub(codesize(), programSize)
+				let programSize := datasize("<object>")
+				let argSize := sub(codesize(), programSize)
 
-					let memoryDataOffset := <allocate>(argSize)
-					codecopy(memoryDataOffset, programSize, argSize)
+				let memoryDataOffset := <allocate>(argSize)
+				codecopy(memoryDataOffset, programSize, argSize)
 
 				<retParams> := <abiDecode>(memoryDataOffset, add(memoryDataOffset, argSize))
 			}
