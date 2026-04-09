@@ -68,8 +68,6 @@ bool AsmAnalyzer::analyze(Block const& _block)
 	auto watcher = m_errorReporter.errorWatcher();
 	try
 	{
-		// FIXME: Pass location of the object name. Now it's a location of first code section in yul
-		validateObjectStructure(nativeLocationOf(_block));
 		if (!(ScopeFiller(m_info, m_errorReporter))(_block))
 			return false;
 
@@ -333,23 +331,6 @@ void AsmAnalyzer::operator()(FunctionDefinition const& _funDef)
 	{
 		expectValidIdentifier(var.name, nativeLocationOf(var));
 		m_activeVariables.insert(&std::get<Scope::Variable>(varScope.identifiers.at(var.name)));
-	}
-
-	if (m_eofVersion.has_value())
-	{
-		if (_funDef.parameters.size() >= 0x80)
-			m_errorReporter.typeError(
-				8534_error,
-				nativeLocationOf(_funDef),
-				"Too many function parameters. At most 127 parameters allowed for EOF"
-			);
-
-		if (_funDef.returnVariables.size() >= 0x80)
-			m_errorReporter.typeError(
-				2101_error,
-				nativeLocationOf(_funDef),
-				"Too many function return variables. At most 127 return variables allowed for EOF"
-			);
 	}
 
 	(*this)(_funDef.body);
@@ -750,33 +731,10 @@ void AsmAnalyzer::expectValidIdentifier(YulName _identifier, SourceLocation cons
 bool AsmAnalyzer::validateInstructions(std::string_view _instructionIdentifier, langutil::SourceLocation const& _location)
 {
 	// NOTE: This function uses the default EVM version instead of the currently selected one.
-	auto const& defaultEVMDialect = EVMDialect::strictAssemblyForEVMObjects(EVMVersion{}, std::nullopt);
+	auto const& defaultEVMDialect = EVMDialect::strictAssemblyForEVMObjects(EVMVersion{});
 	auto const builtinHandle = defaultEVMDialect.findBuiltin(_instructionIdentifier);
 	if (builtinHandle && defaultEVMDialect.builtin(*builtinHandle).instruction.has_value())
 		return validateInstructions(*defaultEVMDialect.builtin(*builtinHandle).instruction, _location);
-
-	solAssert(!m_eofVersion.has_value() || *m_eofVersion == 1);
-	auto const& eofDialect = EVMDialect::strictAssemblyForEVMObjects(EVMVersion::firstWithEOF(), 1);
-	auto const eofBuiltinHandle = eofDialect.findBuiltin(_instructionIdentifier);
-	if (eofBuiltinHandle)
-	{
-		auto const builtin = eofDialect.builtin(*eofBuiltinHandle);
-		if (builtin.instruction.has_value())
-			return validateInstructions(*builtin.instruction, _location);
-		// If builtin is available in EOF but not available in legacy (and we build to legacy) generate custom error.
-		else if (!m_eofVersion.has_value() && !builtinHandle)
-		{
-			m_errorReporter.declarationError(
-				7223_error,
-				_location,
-				fmt::format(
-					"Builtin function \"{function}\" is only available in EOF.",
-					fmt::arg("function", _instructionIdentifier)
-				)
-			);
-			return true;
-		}
-	}
 
 	return false;
 }
@@ -793,17 +751,7 @@ bool AsmAnalyzer::validateInstructions(evmasm::Instruction _instr, SourceLocatio
 	yulAssert(
 		_instr != evmasm::Instruction::JUMP &&
 		_instr != evmasm::Instruction::JUMPI &&
-		_instr != evmasm::Instruction::JUMPDEST &&
-		_instr != evmasm::Instruction::DATALOADN &&
-		_instr != evmasm::Instruction::EOFCREATE &&
-		_instr != evmasm::Instruction::RETURNCONTRACT &&
-		_instr != evmasm::Instruction::RJUMP &&
-		_instr != evmasm::Instruction::RJUMPI &&
-		_instr != evmasm::Instruction::CALLF &&
-		_instr != evmasm::Instruction::JUMPF &&
-		_instr != evmasm::Instruction::RETF &&
-		_instr != evmasm::Instruction::DUPN &&
-		_instr != evmasm::Instruction::SWAPN
+		_instr != evmasm::Instruction::JUMPDEST
 	);
 
 	auto errorForVM = [&](ErrorId _errorId, std::string const& vmKindMessage) {
@@ -862,60 +810,16 @@ bool AsmAnalyzer::validateInstructions(evmasm::Instruction _instr, SourceLocatio
 			"PC instruction is a low-level EVM feature. "
 			"Because of that PC is disallowed in strict assembly."
 		);
-	else if (!m_eofVersion.has_value() && (
-		_instr == evmasm::Instruction::EXTCALL ||
-		_instr == evmasm::Instruction::EXTDELEGATECALL ||
-		_instr == evmasm::Instruction::EXTSTATICCALL
-	))
-	{
-		m_errorReporter.typeError(
-			4328_error,
-			_location,
-			fmt::format(
-				"The \"{instruction}\" instruction is only available in EOF.",
-				fmt::arg("instruction", boost::to_lower_copy(instructionInfo(_instr, m_evmVersion).name))
-			)
-		);
-	}
-	else if (m_eofVersion.has_value() && (
-		_instr == evmasm::Instruction::CALL ||
-		_instr == evmasm::Instruction::CALLCODE ||
-		_instr == evmasm::Instruction::DELEGATECALL ||
-		_instr == evmasm::Instruction::STATICCALL ||
-		_instr == evmasm::Instruction::SELFDESTRUCT ||
-		_instr == evmasm::Instruction::JUMP ||
-		_instr == evmasm::Instruction::JUMPI ||
-		_instr == evmasm::Instruction::PC ||
-		_instr == evmasm::Instruction::CREATE ||
-		_instr == evmasm::Instruction::CREATE2 ||
-		_instr == evmasm::Instruction::CODESIZE ||
-		_instr == evmasm::Instruction::CODECOPY ||
-		_instr == evmasm::Instruction::EXTCODESIZE ||
-		_instr == evmasm::Instruction::EXTCODECOPY ||
-		_instr == evmasm::Instruction::EXTCODEHASH ||
-		_instr == evmasm::Instruction::GAS
-	))
-	{
-		m_errorReporter.typeError(
-			9132_error,
-			_location,
-			fmt::format(
-				"The \"{instruction}\" instruction is {kind} VMs (you are currently compiling to EOF).",
-				fmt::arg("instruction", boost::to_lower_copy(instructionInfo(_instr, m_evmVersion).name)),
-				fmt::arg("kind", "only available in legacy bytecode")
-			)
-		);
-	}
 	else
 	{
 		// Sanity check
-		solAssert(m_evmVersion.hasOpcode(_instr, m_eofVersion));
+		solAssert(m_evmVersion.hasOpcode(_instr));
 		return false;
 	}
 
 	// Sanity check
 	// PC is not available in strict assembly but it is always valid opcode in legacy evm.
-	solAssert(_instr == evmasm::Instruction::PC || !m_evmVersion.hasOpcode(_instr, m_eofVersion));
+	solAssert(_instr == evmasm::Instruction::PC || !m_evmVersion.hasOpcode(_instr));
 	return true;
 }
 
@@ -925,31 +829,4 @@ bool AsmAnalyzer::validateInstructions(FunctionCall const& _functionCall)
 		resolveFunctionName(_functionCall.functionName, m_dialect),
 		nativeLocationOf(_functionCall.functionName)
 	);
-}
-
-void AsmAnalyzer::validateObjectStructure(langutil::SourceLocation const& _astRootLocation)
-{
-	if (m_eofVersion.has_value())
-	{
-		if (util::contains(m_objectStructure.objectName, '.')) // No dots in object name for EOF
-			m_errorReporter.syntaxError(
-				9822_error,
-				_astRootLocation,
-				fmt::format(
-					"The object name \"{objectName}\" is invalid in EOF context. Object names must not contain 'dot' character.",
-					fmt::arg("objectName", m_objectStructure.objectName)
-				)
-			);
-		else if (m_objectStructure.topLevelSubObjectNames().size() > 256)
-		{
-			m_errorReporter.syntaxError(
-				1305_error,
-				_astRootLocation,
-				fmt::format(
-					"Too many subobjects in \"{objectName}\". At most 256 subobjects allowed when compiling to EOF",
-					fmt::arg("objectName", m_objectStructure.objectName)
-				)
-			);
-		}
-	}
 }

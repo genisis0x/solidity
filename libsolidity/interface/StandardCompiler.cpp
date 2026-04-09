@@ -885,19 +885,6 @@ std::variant<StandardCompiler::InputsAndSettings, Json> StandardCompiler::parseI
 		ret.evmVersion = *version;
 	}
 
-	if (settings.contains("eofVersion"))
-	{
-		if (!settings["eofVersion"].is_number_unsigned())
-			return formatFatalError(Error::Type::JSONError, "eofVersion must be an unsigned integer.");
-		auto eofVersion = settings["eofVersion"].get<uint8_t>();
-		if (eofVersion != 1)
-			return formatFatalError(Error::Type::JSONError, "Invalid EOF version requested.");
-		ret.eofVersion = 1;
-	}
-
-	if (ret.eofVersion.has_value() && !ret.evmVersion.supportsEOF())
-		return formatFatalError(Error::Type::JSONError, "EOF is not supported by EVM versions earlier than " + EVMVersion::firstWithEOF().name() + ".");
-
 	if (settings.contains("debug"))
 	{
 		if (auto result = checkKeys(settings["debug"], {"revertStrings", "debugInfo"}, "settings.debug"))
@@ -1279,9 +1266,6 @@ std::variant<StandardCompiler::InputsAndSettings, Json> StandardCompiler::parseI
 		if (isExperimentalArtifactRequested(ret.outputSelection))
 			return formatFatalError(Error::Type::FatalError, "'irAst', 'irOptimizedAst', 'yulCFGJson', and 'ethdebug' outputs are experimental and can only be used with the 'settings.experimental' option enabled.");
 
-		if (ret.eofVersion.has_value())
-			return formatFatalError(Error::Type::FatalError, "'eofVersion' setting is experimental and can only be used with the 'settings.experimental' option enabled.");
-
 		if (ret.viaSSACFG)
 			return formatFatalError(Error::Type::FatalError, "'viaSSACFG' setting is experimental and can only be used with the 'settings.experimental' option enabled.");
 	}
@@ -1318,7 +1302,6 @@ Json StandardCompiler::importEVMAssembly(StandardCompiler::InputsAndSettings _in
 
 	evmasm::EVMAssemblyStack stack(
 		_inputsAndSettings.evmVersion,
-		_inputsAndSettings.eofVersion,
 		evmasm::Assembly::OptimiserSettings::translateSettings(
 			_inputsAndSettings.optimiserSettings
 		)
@@ -1436,7 +1419,6 @@ Json StandardCompiler::compileSolidity(StandardCompiler::InputsAndSettings _inpu
 	compilerStack.setViaIR(_inputsAndSettings.viaIR);
 	compilerStack.setViaSSACFG(_inputsAndSettings.viaSSACFG);
 	compilerStack.setEVMVersion(_inputsAndSettings.evmVersion);
-	compilerStack.setEOFVersion(_inputsAndSettings.eofVersion);
 	compilerStack.setRemappings(std::move(_inputsAndSettings.remappings));
 	compilerStack.setOptimiserSettings(std::move(_inputsAndSettings.optimiserSettings));
 	compilerStack.setRevertStringBehaviour(_inputsAndSettings.revertStrings);
@@ -1759,7 +1741,6 @@ Json StandardCompiler::compileYul(InputsAndSettings _inputsAndSettings)
 
 	YulStack stack(
 		_inputsAndSettings.evmVersion,
-		_inputsAndSettings.eofVersion,
 		_inputsAndSettings.optimiserSettings,
 		_inputsAndSettings.debugInfoSelection.has_value() ?
 			_inputsAndSettings.debugInfoSelection.value() :

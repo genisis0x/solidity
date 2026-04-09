@@ -247,7 +247,6 @@ BOOST_AUTO_TEST_CASE(metadata_eof_experimental)
 		compilerStack.setSources({{"", sourceCode}});
 		compilerStack.setEVMVersion(solidity::test::CommonOptions::get().evmVersion());
 		compilerStack.setViaIR(true);
-		compilerStack.setEOFVersion(solidity::test::CommonOptions::get().eofVersion());
 		compilerStack.setOptimiserSettings(solidity::test::CommonOptions::get().optimize);
 		BOOST_REQUIRE_MESSAGE(compilerStack.compile(), "Compiling contract failed");
 		bytes const& bytecode = compilerStack.runtimeObject("test").bytecode;
@@ -256,10 +255,7 @@ BOOST_AUTO_TEST_CASE(metadata_eof_experimental)
 
 		auto const cborMetadata = requireParsedCBORMetadata(bytecode, metadataFormat);
 
-		if (
-			metadataFormat == CompilerStack::MetadataFormat::NoMetadata ||
-			!solidity::test::CommonOptions::get().eofVersion().has_value()
-		)
+		if (metadataFormat == CompilerStack::MetadataFormat::NoMetadata)
 			BOOST_CHECK(cborMetadata.count("experimental") == 0);
 		else
 		{

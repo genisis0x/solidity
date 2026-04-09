@@ -892,7 +892,6 @@ void CommandLineInterface::assembleFromEVMAssemblyJSON()
 
 	auto evmAssemblyStack = std::make_unique<evmasm::EVMAssemblyStack>(
 		m_options.output.evmVersion,
-		m_options.output.eofVersion,
 		evmasm::Assembly::OptimiserSettings::translateSettings(
 			m_options.optimiserSettings()
 		)
@@ -939,7 +938,6 @@ void CommandLineInterface::compile()
 		m_compiler->setViaIR(m_options.output.viaIR);
 		m_compiler->setViaSSACFG(m_options.output.viaSSACFG);
 		m_compiler->setEVMVersion(m_options.output.evmVersion);
-		m_compiler->setEOFVersion(m_options.output.eofVersion);
 		m_compiler->setRevertStringBehaviour(m_options.output.revertStrings);
 		if (m_options.output.debugInfoSelection.has_value())
 			m_compiler->selectDebugInfo(m_options.output.debugInfoSelection.value());
@@ -1297,7 +1295,6 @@ void CommandLineInterface::assembleYul(yul::YulStack::Machine _targetMachine)
 	{
 		auto& stack = yulStacks[sourceUnitName] = yul::YulStack(
 			m_options.output.evmVersion,
-			m_options.output.eofVersion,
 			m_options.optimiserSettings(),
 			m_options.output.debugInfoSelection.has_value() ?
 				m_options.output.debugInfoSelection.value() :

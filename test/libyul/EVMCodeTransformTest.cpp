@@ -55,7 +55,6 @@ TestCase::TestResult EVMCodeTransformTest::run(std::ostream& _stream, std::strin
 	// can be different from version to version.
 	YulStack yulStack(
 		CommonOptions::get().evmVersion(),
-		CommonOptions::get().eofVersion(),
 		settings,
 		DebugInfoSelection::AllExceptExperimental()
 	);
@@ -66,7 +65,7 @@ TestCase::TestResult EVMCodeTransformTest::run(std::ostream& _stream, std::strin
 		return TestResult::FatalError;
 	}
 
-	evmasm::Assembly assembly{CommonOptions::get().evmVersion(), false, CommonOptions::get().eofVersion(), {}};
+	evmasm::Assembly assembly{CommonOptions::get().evmVersion(), false, {}};
 	EthAssemblyAdapter adapter(assembly);
 	EVMObjectCompiler::compile(
 		*yulStack.parserResult(),
