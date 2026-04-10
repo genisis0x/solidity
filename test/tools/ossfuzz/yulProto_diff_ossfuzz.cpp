@@ -63,7 +63,6 @@ DEFINE_PROTO_FUZZER(Program const& _input)
 	// YulStack entry point
 	YulStack stack(
 		version,
-		std::nullopt,
 		solidity::frontend::OptimiserSettings::full(),
 		DebugInfoSelection::All()
 	);
