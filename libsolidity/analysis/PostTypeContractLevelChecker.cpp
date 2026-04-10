@@ -181,18 +181,6 @@ void PostTypeContractLevelChecker::checkStorageLayoutSpecifier(ContractDefinitio
 		return;
 	}
 
-	if (!baseSlotExpressionType->isImplicitlyConvertibleTo(*TypeProvider::uint256()))
-	{
-		m_errorReporter.typeError(
-			1481_error,
-			baseSlotExpression.location(),
-			fmt::format(
-				"Base slot expression of type '{}' is not convertible to uint256.",
-				baseSlotExpressionType->humanReadableName()
-			)
-		);
-		return;
-	}
 	storageLayoutSpecifier->annotation().baseSlot = u256(baseSlot);
 
 	bigint size = contractStorageSizeUpperBound(_contract, VariableDeclaration::Location::Unspecified);

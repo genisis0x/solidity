@@ -1,6 +1,7 @@
 ### 0.8.35 (unreleased)
 
 Language Features:
+* Custom Storage Layout: Allow signed positive expressions.
 * General: Add a builtin that computes the base slot of a storage namespace using the `erc7201` formula from ERC-7201.
 
 Compiler Features:
