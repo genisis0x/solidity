@@ -17,6 +17,7 @@ Compiler Features:
 * Yul Optimizer: Improve performance of control flow side effects collector and function references resolver.
 
 Bugfixes:
+* Constant Evaluator: Fix incorrect result of bit operations which were not consistent with codegen.
 * Yul: Fix incorrect serialization of Yul object names containing double quotes and escape sequences, producing output that could not be parsed as valid Yul.
 * Yul EVM Code Transform: Improve stack shuffler performance by fixing a BFS deduplication issue.
 

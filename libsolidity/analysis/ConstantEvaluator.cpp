@@ -275,6 +275,29 @@ TypedValue convertType(TypedValue const& _value, Type const& _type)
 	}, _value.value);
 }
 
+rational truncateToType(rational const& _value, Type const& _type)
+{
+	if (_type.category() != Type::Category::Integer)
+		return _value;
+
+	auto const* integerType = dynamic_cast<IntegerType const*>(&_type);
+	solAssert(integerType);
+
+	solAssert(_value.denominator() == 1);
+	bigint integerValue = _value.numerator();
+
+	unsigned int numBits = integerType->numBits();
+	bigint mask = (bigint(1) << numBits) - 1;
+	// clean bits out of range
+	integerValue = integerValue & mask;
+
+	// extend sign if needed
+	if (integerType->isSigned() && boost::multiprecision::bit_test(integerValue, numBits - 1))
+		integerValue = integerValue | ~mask;
+
+	return rational(integerValue);
+}
+
 TypedValue constantToTypedValue(Type const& _type)
 {
 	if (_type.category() == Type::Category::RationalNumber)
@@ -358,7 +381,11 @@ void ConstantEvaluator::endVisit(UnaryOperation const& _operation)
 
 	if (std::optional<rational> result = evaluateUnaryOperator(_operation.getOperator(), std::get<rational>(value.value)))
 	{
-		TypedValue convertedValue = convertType(*result, *resultType);
+		rational resultValue = *result;
+		if (TokenTraits::isBitOp(_operation.getOperator()))
+			resultValue = truncateToType(resultValue, *resultType);
+
+		TypedValue convertedValue = convertType(resultValue, *resultType);
 		if (!convertedValue.type)
 			m_errorReporter.fatalTypeError(
 				3667_error,
@@ -411,8 +438,12 @@ void ConstantEvaluator::endVisit(BinaryOperation const& _operation)
 		std::get<rational>(right.value)
 	))
 	{
-		TypedValue convertedValue = convertType(*value, *resultType);
-		if (!convertedValue.type)
+		rational resultValue = *value;
+		if (TokenTraits::isShiftOp(_operation.getOperator()))
+			resultValue = truncateToType(*value, *resultType);
+
+		TypedValue convertedValue = convertType(resultValue, *resultType);
+			if (!convertedValue.type)
 			m_errorReporter.fatalTypeError(
 				2643_error,
 				_operation.location(),
