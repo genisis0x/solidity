@@ -7,3 +7,4 @@ contract C {
 // ====
 // SMTEngine: chc
 // ----
+// Warning 6031: (186-199): Internal error: Expression undefined for SMT solver.
