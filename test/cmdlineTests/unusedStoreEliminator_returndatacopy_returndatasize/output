@@ -22,6 +22,7 @@ object "C_7" {
                     {
                         if callvalue() { revert(0, 0) }
                         if slt(add(calldatasize(), not(3)), 0) { revert(0, 0) }
+                        returndatacopy(96, 0, returndatasize())
                         return(0, 0)
                     }
                 }
@@ -31,4 +32,3 @@ object "C_7" {
         data ".metadata" hex""
     }
 }
-
