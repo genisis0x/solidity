@@ -181,3 +181,27 @@ Target const& State::target() const
 {
 	return m_target;
 }
+
+bool State::willRequireShrinking() const
+{
+	std::size_t deficit = 0u;
+	for (auto const& [slot, minCount]: target().minCount)
+	{
+		if (slot.isJunk())
+			continue;
+		auto const currentCount = count(slot);
+		if (currentCount < minCount)
+			deficit += minCount - currentCount;
+	}
+	return deficit + size() > target().size;
+}
+
+std::optional<StackDepth> State::findDeepestIncorrectArgSlot() const
+{
+	for (StackOffset const offset: stackArgsRange())
+	{
+		if (!isArgsCompatible(offset, offset))
+			return StackDepth{m_stackData.size() - offset.value};
+	}
+	return std::nullopt;
+}

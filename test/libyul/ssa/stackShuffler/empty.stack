@@ -12,3 +12,4 @@ targetStackSize: 3
 //    PUSH JUNK|      *      *      *
 //             +---------------------
 //     (target)|
+// Status: Admissible

@@ -87,12 +87,17 @@ CodeTransform::FunctionLabels CodeTransform::registerFunctionLabels(
 		if (!_function)
 			continue;
 		bool nameAlreadySeen = !assignedFunctionNames.insert(_function->name).second;
+		auto const sourceID = [&]() -> std::optional<std::size_t> {
+			if (_functionGraph->debugInfo && _functionGraph->debugInfo->graphDebugData)
+				return _functionGraph->debugInfo->graphDebugData->astID;
+			return std::nullopt;
+		}();
 		functionLabels[_function] = !nameAlreadySeen ?
 			_assembly.namedLabel(
 				_function->name.str(),
 				_functionGraph->arguments.size(),
 				_functionGraph->returns.size(),
-				_functionGraph->debugData ? _functionGraph->debugData->astID : std::nullopt
+				sourceID
 			) :
 			_assembly.newLabelId();
 	}
@@ -171,24 +176,25 @@ void CodeTransform::operator()(SSACFG::BlockId const _blockId)
 
 	for (std::size_t operationIndex = 0; operationIndex < block.operations.size(); ++operationIndex)
 	{
-		SSACFG::Operation const& operation = block.operations[operationIndex];
 		auto const& operationInLayout = blockLayout->operationIn[operationIndex];
 
 		// perform the operation
-		(*this)(operation, operationInLayout);
+		(*this)(block.operations[operationIndex], operationInLayout);
 	}
 
 	// Shuffle to the block's exit layout before dispatching the exit.
 	// This ensures the condition is on top for ConditionalJump, phi pre-images are
 	// in the right positions for jumps, and return values are accessible for FunctionReturn.
-	StackShuffler<AssemblyCallbacks>::shuffle(m_stack, blockLayout->stackOut);
+	auto const shuffleResult = StackShuffler<AssemblyCallbacks>::shuffle(m_stack, blockLayout->exitIn);
+	yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);
 
 	// handle the block exit
 	std::visit(util::GenericVisitor{ [this, &_blockId](auto const& exit) { (*this)(_blockId, exit); } }, block.exit);
 }
 
-void CodeTransform::operator()(SSACFG::Operation const& _operation, StackData const& _operationInputLayout)
+void CodeTransform::operator()(SSACFG::OperationId _opId, StackData const& _operationInputLayout)
 {
+	SSACFG::Operation const& _operation = m_cfg.operation(_opId);
 	bool const hasReturnLabel =
 			std::holds_alternative<SSACFG::Call>(_operation.kind) &&
 			std::get<SSACFG::Call>(_operation.kind).canContinue;
@@ -204,7 +210,10 @@ void CodeTransform::operator()(SSACFG::Operation const& _operation, StackData co
 	yulAssert(static_cast<int>(m_stack.size()) == m_assembly.stackHeight());
 
 	// prepare stack for operation
-	StackShuffler<AssemblyCallbacks>::shuffle(m_stack, _operationInputLayout);
+	{
+		auto const shuffleResult = StackShuffler<AssemblyCallbacks>::shuffle(m_stack, _operationInputLayout);
+		yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);
+	}
 
 	// check that the assembly stack height corresponds to the stack size after shuffling
 	yulAssert(static_cast<int>(m_stack.size()) == m_assembly.stackHeight());
@@ -235,10 +244,17 @@ void CodeTransform::operator()(SSACFG::Operation const& _operation, StackData co
 	// height of the stack sans function return label and operation inputs
 	std::size_t const baseHeight = m_stack.size() - _operation.inputs.size() - (hasReturnLabel ? 1 : 0);
 
+	auto const opOriginLocation = [&]() -> langutil::SourceLocation {
+		if (m_cfg.debugInfo)
+			if (auto const& dbg = m_cfg.debugInfo->operationDebugData(_opId))
+				return dbg->originLocation;
+		return {};
+	}();
+
 	// generate code for the operation
 	std::visit(util::GenericVisitor{
 		[&](SSACFG::BuiltinCall const& _builtin) {
-			m_assembly.setSourceLocation(originLocationOf(_builtin));
+			m_assembly.setSourceLocation(opOriginLocation);
 			static_cast<BuiltinFunctionForEVM const&>(_builtin.builtin.get()).generateCode(
 				_builtin.call,
 				m_assembly,
@@ -249,7 +265,7 @@ void CodeTransform::operator()(SSACFG::Operation const& _operation, StackData co
 			auto const* returnLabel = util::valueOrNullptr(m_returnLabels, &_call.call.get());
 			// check that if we have a return label, the call can continue
 			yulAssert(!!returnLabel == _call.canContinue);
-			m_assembly.setSourceLocation(originLocationOf(_call));
+			m_assembly.setSourceLocation(opOriginLocation);
 			m_assembly.appendJumpTo(
 				m_functionLabels.at(&_call.function.get()),
 				static_cast<int>(_call.function.get().numReturns - _call.function.get().numArguments) - (_call.canContinue ? 1 : 0),
@@ -373,7 +389,7 @@ void CodeTransform::operator()(SSACFG::BlockId const& _blockId, SSACFG::BasicBlo
 		[](SSACFG::LiteralAssignment const&) {
 			yulAssert(false, "Terminated block cannot end with a literal assignment.");
 		}
-	}, block.operations.back().kind);
+	}, m_cfg.operation(block.operations.back()).kind);
 	// To be sure just emit another INVALID - should be removed by optimizer.
 	m_assembly.appendInstruction(evmasm::Instruction::INVALID);
 }
@@ -383,7 +399,10 @@ void CodeTransform::prepareBlockExitStack(StackData const& _target, PhiInverse c
 	// pull back target to live in current variable space
 	auto const pulledBackTarget = stackPreImage(_target, _phiInverse);
 	// shuffle to target
-	StackShuffler<AssemblyCallbacks>::shuffle(m_stack, pulledBackTarget);
+	{
+		auto const shuffleResult = StackShuffler<AssemblyCallbacks>::shuffle(m_stack, pulledBackTarget);
+		yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);
+	}
 	// check that shuffling was successful
 	assertLayoutCompatibility(m_stack.data(), pulledBackTarget);
 	// now we can simply set the target to the actual one which will take care of the application of phi functions

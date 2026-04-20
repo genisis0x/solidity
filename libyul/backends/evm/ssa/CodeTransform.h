@@ -118,7 +118,7 @@ private:
 		ControlFlow::FunctionGraphID _graphID);
 
 	void operator()(SSACFG::BlockId _blockId);
-	void operator()(SSACFG::Operation const& _operation, StackData const& _operationInputLayout);
+	void operator()(SSACFG::OperationId _opId, StackData const& _operationInputLayout);
 	void operator()(SSACFG::BlockId const& _currentBlock, SSACFG::BasicBlock::MainExit const& _mainExit);
 	void operator()(SSACFG::BlockId const& _currentBlock, SSACFG::BasicBlock::ConditionalJump const& _conditionalJump);
 	void operator()(SSACFG::BlockId const& _currentBlock, SSACFG::BasicBlock::Jump const& _jump);

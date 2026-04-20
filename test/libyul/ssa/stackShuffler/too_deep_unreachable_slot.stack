@@ -1,0 +1,12 @@
+// A value at the bottom of an 18-slot stack is needed at the top, but is at depth 17.
+// allNecessarySlotsReachableOrFinal detects the unreachable slot, shrinkStack fails since all values are unique
+// and essential. Triggers StackTooDeep in shuffleStep (unreachable path).
+initial: [v18, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v1]
+targetStackTop: [v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18]
+// ----
+//             |      0      1      2      3      4      5      6      7      8      9     10     11     12     13     14     15     16     17
+//             +------------------------------------------------------------------------------------------------------------------------------
+//    (initial)|    v18     v2     v3     v4     v5     v6     v7     v8     v9    v10    v11    v12    v13    v14    v15    v16    v17     v1
+//             +------------------------------------------------------------------------------------------------------------------------------
+//     (target)|     v1     v2     v3     v4     v5     v6     v7     v8     v9    v10    v11    v12    v13    v14    v15    v16    v17    v18
+// Status: StackTooDeep (culprit: v18)

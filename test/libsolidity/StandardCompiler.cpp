@@ -1181,7 +1181,10 @@ BOOST_AUTO_TEST_CASE(evm_version)
 	Json result;
 	for (auto const& version: EVMVersion::allVersions())
 	{
-		result = compile(inputForVersion(fmt::format("\"evmVersion\": \"{}\",", version.name())));
+		if (version.isExperimental())
+			result = compile(inputForVersion(fmt::format("\"evmVersion\": \"{}\", \"experimental\": {},", version.name(), "true")));
+		else
+			result = compile(inputForVersion(fmt::format("\"evmVersion\": \"{}\",", version.name())));
 		BOOST_CHECK(result["contracts"]["fileA"]["A"]["metadata"].get<std::string>().find(fmt::format("\"evmVersion\":\"{}\"", version.name())) != std::string::npos);
 	}
 	// test default
@@ -2096,21 +2099,21 @@ BOOST_AUTO_TEST_CASE(ethdebug_ethdebug_output)
 			generateExperimentalStandardJson(true, Json::array({"ethdebug"}), Json::array({"evm.bytecode.ethdebug"})),
 			[](const Json& result)
 			{
-				return result.contains("ethdebug") && result["contracts"]["fileA"]["C"]["evm"]["bytecode"].contains("ethdebug");
+				return result["contracts"]["fileA"]["C"]["evm"]["bytecode"].contains("ethdebug");
 			}
 		},
 		{
 			generateExperimentalStandardJson(true, Json::array({"ethdebug"}), Json::array({"evm.deployedBytecode.ethdebug"})),
 			[](const Json& result)
 			{
-				return result.contains("ethdebug") && result["contracts"]["fileA"]["C"]["evm"]["deployedBytecode"].contains("ethdebug");
+				return result["contracts"]["fileA"]["C"]["evm"]["deployedBytecode"].contains("ethdebug");
 			}
 		},
 		{
 			generateExperimentalStandardJson(true, Json::array({"ethdebug"}), Json::array({"evm.bytecode.ethdebug", "evm.deployedBytecode.ethdebug"})),
 			[](const Json& result)
 			{
-				return result.contains("ethdebug") && result["contracts"]["fileA"]["C"]["evm"]["deployedBytecode"].contains("ethdebug") &&
+				return result["contracts"]["fileA"]["C"]["evm"]["deployedBytecode"].contains("ethdebug") &&
 					 result["contracts"]["fileA"]["C"]["evm"]["bytecode"].contains("ethdebug");
 			}
 		},
@@ -2118,21 +2121,21 @@ BOOST_AUTO_TEST_CASE(ethdebug_ethdebug_output)
 			generateExperimentalStandardJson(true, {}, Json::array({"evm.bytecode.ethdebug"})),
 			[](const Json& result)
 			{
-				return result.contains("ethdebug") && result["contracts"]["fileA"]["C"]["evm"]["bytecode"].contains("ethdebug");
+				return result["contracts"]["fileA"]["C"]["evm"]["bytecode"].contains("ethdebug");
 			}
 		},
 		{
 			generateExperimentalStandardJson(true, {}, Json::array({"evm.deployedBytecode.ethdebug"})),
 			[](const Json& result)
 			{
-				return result.contains("ethdebug") && result["contracts"]["fileA"]["C"]["evm"]["deployedBytecode"].contains("ethdebug");
+				return result["contracts"]["fileA"]["C"]["evm"]["deployedBytecode"].contains("ethdebug");
 			}
 		},
 		{
 			generateExperimentalStandardJson(true, {}, Json::array({"evm.bytecode.ethdebug", "evm.deployedBytecode.ethdebug"})),
 			[](const Json& result)
 			{
-				return result.contains("ethdebug") && result["contracts"]["fileA"]["C"]["evm"]["deployedBytecode"].contains("ethdebug") &&
+				return result["contracts"]["fileA"]["C"]["evm"]["deployedBytecode"].contains("ethdebug") &&
 					 result["contracts"]["fileA"]["C"]["evm"]["bytecode"].contains("ethdebug");
 			}
 		},
@@ -2140,14 +2143,14 @@ BOOST_AUTO_TEST_CASE(ethdebug_ethdebug_output)
 			generateExperimentalStandardJson(true, {}, Json::array({"evm.bytecode.ethdebug", "ir"})),
 			[](const Json& result)
 			{
-				return result.dump().find("/// ethdebug: enabled") != std::string::npos && result.contains("ethdebug") && result["contracts"]["fileA"]["C"]["evm"]["bytecode"].contains("ethdebug");
+				return result.dump().find("/// ethdebug: enabled") != std::string::npos && result["contracts"]["fileA"]["C"]["evm"]["bytecode"].contains("ethdebug");
 			}
 		},
 		{
 			generateExperimentalStandardJson(true, {}, Json::array({"evm.deployedBytecode.ethdebug", "ir"})),
 			[](const Json& result)
 			{
-				return result.dump().find("/// ethdebug: enabled") != std::string::npos && result.contains("ethdebug") && result["contracts"]["fileA"]["C"]["evm"]["deployedBytecode"].contains("ethdebug");
+				return result.dump().find("/// ethdebug: enabled") != std::string::npos && result["contracts"]["fileA"]["C"]["evm"]["deployedBytecode"].contains("ethdebug");
 			}
 		},
 		{
@@ -2162,7 +2165,7 @@ BOOST_AUTO_TEST_CASE(ethdebug_ethdebug_output)
 			generateExperimentalStandardJson(true, {}, Json::array({"evm.bytecode.ethdebug", "evm.deployedBytecode.ethdebug", "ir"})),
 			[](const Json& result)
 			{
-				return result.dump().find("/// ethdebug: enabled") != std::string::npos && result.contains("ethdebug") && result["contracts"]["fileA"]["C"]["evm"]["deployedBytecode"].contains("ethdebug") &&
+				return result.dump().find("/// ethdebug: enabled") != std::string::npos && result["contracts"]["fileA"]["C"]["evm"]["deployedBytecode"].contains("ethdebug") &&
 					 result["contracts"]["fileA"]["C"]["evm"]["bytecode"].contains("ethdebug");
 			}
 		},
@@ -2209,7 +2212,7 @@ BOOST_AUTO_TEST_CASE(ethdebug_ethdebug_output)
 			[](const Json& result)
 			{
 				return result["contracts"]["fileA"]["contractA"]["evm"]["deployedBytecode"].contains("ethdebug") &&
-					result["contracts"]["fileB"]["contractB"]["evm"]["bytecode"].contains("ethdebug") && result.contains("ethdebug");
+					result["contracts"]["fileB"]["contractB"]["evm"]["bytecode"].contains("ethdebug");
 			}
 		}
 	};

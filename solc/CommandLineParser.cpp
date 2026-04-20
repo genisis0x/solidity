@@ -168,8 +168,10 @@ std::vector<std::string> const& CommandLineParser::experimentalOptionNames()
 		"ir-ast-json",
 		"ir-optimized-ast-json",
 		"yul-cfg-json",
-		"ethdebug",
-		"ethdebug-runtime",
+		"ethdebug-resources",
+		"ethdebug-compilation",
+		"ethdebug-program",
+		"ethdebug-program-runtime",
 		g_strEOFVersion,
 		g_strViaSSACFG,
 	};
@@ -191,19 +193,18 @@ void CommandLineParser::checkExperimental(std::vector<std::string> const& _optio
 		);
 	}
 
-	if (m_args.contains(g_strEVMVersion))
+	if (!m_args.contains(g_strExperimental) && m_args.contains(g_strEVMVersion))
 	{
 		std::string versionOptionStr = m_args[g_strEVMVersion].as<std::string>();
 		std::optional<langutil::EVMVersion> versionOption = langutil::EVMVersion::fromString(versionOptionStr);
 
 		if (versionOption.has_value() && versionOption->isExperimental())
-			// TODO: Cover with test when the Amsterdam version is introduced
 			solThrow(
 				CommandLineValidationError,
 				fmt::format(
 					"EVM version '{}' is experimental and can only be selected in experimental mode. "
-					"To enable experimental mode, use the --{} flag",
-					m_options.output.evmVersion.name(),
+					"To enable experimental mode, use the --{} flag.",
+					versionOption->name(),
 					g_strExperimental
 				)
 			);
@@ -476,7 +477,9 @@ void CommandLineParser::parseOutputSelection()
 			CompilerOutputs::componentName(&CompilerOutputs::astCompactJson),
 			CompilerOutputs::componentName(&CompilerOutputs::asmJson),
 			CompilerOutputs::componentName(&CompilerOutputs::yulCFGJson),
-			CompilerOutputs::componentName(&CompilerOutputs::ethdebug),
+			CompilerOutputs::componentName(&CompilerOutputs::ethdebugResources),
+			CompilerOutputs::componentName(&CompilerOutputs::ethdebugCompilation),
+			CompilerOutputs::componentName(&CompilerOutputs::ethdebugProgram),
 		};
 		static std::set<std::string> const evmAssemblyJsonImportModeOutputs = {
 			CompilerOutputs::componentName(&CompilerOutputs::asm_),
@@ -782,13 +785,20 @@ General Information)").c_str(),
 		"(experimental) Control Flow Graph (CFG) of Yul code in Static Single Assignment (SSA) form in JSON format."
 	)
 	(
-		CompilerOutputs::componentName(&CompilerOutputs::ethdebug).c_str(),
-		"(experimental) Debug information in ethdebug format for all contracts (ethdebug/format/program schema). "
-		"When enabled, an extra global output containing the ethdebug/format/info/resources schema with information shared by all contracts is automatically enabled as well."
+		CompilerOutputs::componentName(&CompilerOutputs::ethdebugResources).c_str(),
+		"(experimental) Global ethdebug output (ethdebug/format/info/resources schema) containing source list and compiler info."
 	)
 	(
-		CompilerOutputs::componentName(&CompilerOutputs::ethdebugRuntime).c_str(),
-		("(experimental) Like --" + CompilerOutputs::componentName(&CompilerOutputs::ethdebug) + ", but for the runtime part of the contracts.").c_str()
+		CompilerOutputs::componentName(&CompilerOutputs::ethdebugCompilation).c_str(),
+		"(experimental) Global ethdebug compilation output (the 'compilation' key from ethdebug/format/info/resources schema)."
+	)
+	(
+		CompilerOutputs::componentName(&CompilerOutputs::ethdebugProgram).c_str(),
+		"(experimental) Debug information in ethdebug format for all contracts (ethdebug/format/program schema for creation bytecode)."
+	)
+	(
+		CompilerOutputs::componentName(&CompilerOutputs::ethdebugProgramRuntime).c_str(),
+		"(experimental) Debug information in ethdebug format for the runtime part of all contracts (ethdebug/format/program schema for deployed bytecode)."
 	);
 	desc.add(outputComponents);
 
@@ -1378,7 +1388,7 @@ void CommandLineParser::processArgs()
 
 		m_options.output.viaSSACFG = m_args.contains(g_strViaSSACFG);
 
-		if (m_options.compiler.outputs.ethdebug || m_options.compiler.outputs.ethdebugRuntime)
+		if (m_options.compiler.outputs.ethdebugProgram || m_options.compiler.outputs.ethdebugProgramRuntime)
 		{
 			if (m_options.output.viaSSACFG)
 				solUnimplemented("ethdebug is not yet supported with --" + g_strViaSSACFG + ".");
@@ -1532,32 +1542,20 @@ void CommandLineParser::processArgs()
 		m_options.input.mode == InputMode::EVMAssemblerJSON
 	);
 
-	bool incompatibleEthdebugOutputs =
-		m_options.compiler.outputs.asmJson || m_options.compiler.outputs.irAstJson || m_options.compiler.outputs.irOptimizedAstJson ||
-		m_options.optimizer.optimizeYul || m_options.optimizer.optimizeEvmasm;
+	bool ethdebugProgramRequested = m_options.compiler.outputs.ethdebugProgram || m_options.compiler.outputs.ethdebugProgramRuntime;
 
-	bool incompatibleEthdebugInputs = m_options.input.mode != InputMode::Compiler;
+	std::string const enableEthdebugProgramMessage = fmt::format(
+		"--{} / --{}",
+		CompilerOutputs::componentName(&CompilerOutputs::ethdebugProgram),
+		CompilerOutputs::componentName(&CompilerOutputs::ethdebugProgramRuntime)
+	);
 
-	static std::string enableEthdebugMessage =
-		"--" + CompilerOutputs::componentName(&CompilerOutputs::ethdebug) + " / --" + CompilerOutputs::componentName(&CompilerOutputs::ethdebugRuntime);
-
-	static std::string enableIrMessage = "--" + CompilerOutputs::componentName(&CompilerOutputs::ir) + " / --" + CompilerOutputs::componentName(&CompilerOutputs::irOptimized);
-
-	if (m_options.compiler.outputs.ethdebug || m_options.compiler.outputs.ethdebugRuntime)
+	if (ethdebugProgramRequested)
 	{
 		if (!m_options.output.viaIR)
 			solThrow(
 				CommandLineValidationError,
-				enableEthdebugMessage + " output can only be selected, if --via-ir was specified."
-			);
-
-		if (m_options.output.viaSSACFG)
-			solUnimplemented("ethdebug is not yet supported with --" + g_strViaSSACFG + ".");
-
-		if (incompatibleEthdebugOutputs)
-			solThrow(
-				CommandLineValidationError,
-				enableEthdebugMessage + " output can only be used with " + enableIrMessage + ". Optimization (using --" + g_strOptimize + ") is not yet supported with ethdebug."
+				enableEthdebugProgramMessage + " output can only be selected, if --via-ir was specified."
 			);
 
 		if (!m_options.output.debugInfoSelection.has_value())
@@ -1570,25 +1568,29 @@ void CommandLineParser::processArgs()
 			if (!m_options.output.debugInfoSelection->ethdebug)
 				solThrow(
 					CommandLineValidationError,
-					"--debug-info must contain ethdebug, when compiling with " + enableEthdebugMessage + "."
+					"--debug-info must contain ethdebug, when compiling with " + enableEthdebugProgramMessage + "."
 				);
 		}
 	}
 
 	if (
 		m_options.output.debugInfoSelection.has_value() && m_options.output.debugInfoSelection->ethdebug &&
-		(!(m_options.compiler.outputs.ir || m_options.compiler.outputs.ethdebug || m_options.compiler.outputs.ethdebugRuntime) || incompatibleEthdebugOutputs)
+		m_options.input.mode != InputMode::Compiler
 	)
 		solThrow(
 			CommandLineValidationError,
-			"--debug-info ethdebug can only be used with " + enableIrMessage + " and/or " + enableEthdebugMessage + ". Optimization (using --" + g_strOptimize + ") is not yet supported with ethdebug."
+			"Invalid input mode for --debug-info ethdebug."
 		);
 
-	if (m_options.output.debugInfoSelection.has_value() && m_options.output.debugInfoSelection->ethdebug && incompatibleEthdebugInputs)
-		solThrow(
-			CommandLineValidationError,
-			"Invalid input mode for --debug-info ethdebug / --ethdebug / --ethdebug-runtime."
-		);
+	if (m_options.output.debugInfoSelection.has_value() && m_options.output.debugInfoSelection->ethdebug)
+	{
+		if (m_options.output.viaSSACFG)
+			solUnimplemented("ethdebug is not yet supported with --" + g_strViaSSACFG + ".");
+		if (m_options.optimizer.optimizeYul || m_options.optimizer.optimizeEvmasm)
+			solUnimplemented(
+				"Optimization (using --" + g_strOptimize + ") is not yet supported with ethdebug."
+			);
+	}
 }
 
 void CommandLineParser::parseCombinedJsonOption()

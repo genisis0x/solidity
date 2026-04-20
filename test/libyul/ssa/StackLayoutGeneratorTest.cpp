@@ -74,7 +74,7 @@ protected:
 
 		for (std::size_t i = 0; i < block.operations.size(); ++i)
 		{
-			auto const& operation = block.operations[i];
+			auto const& operation = m_cfg.operation(block.operations[i]);
 			yulAssert(i < blockLayout->operationIn.size());
 			auto operationStack = blockLayout->operationIn[i];
 
@@ -104,7 +104,7 @@ protected:
 		}
 
 		_out << "\\l\\\n";
-		_out << "OUT: " << stackToString(blockLayout->stackOut) << "\\l\\\n";
+		_out << "OUT: " << stackToString(blockLayout->exitIn) << "\\l\\\n";
 	}
 
 private:
@@ -145,9 +145,12 @@ frontend::test::TestCase::TestResult StackLayoutGeneratorTest::run(std::ostream&
 		auto const& object = *toVisit.back();
 		toVisit.pop_back();
 
+		auto const* evmDialect = dynamic_cast<EVMDialect const*>(object.dialect());
+		yulAssert(evmDialect);
+
 		std::unique_ptr<ControlFlow> const controlFlow = SSACFGBuilder::build(
 			*object.analysisInfo,
-			*object.dialect(),
+			*evmDialect,
 			object.code()->root(),
 			false
 		);

@@ -115,6 +115,16 @@ Slot parseSlot(std::string_view token)
 			return Slot::makeValueID(ValueId::makeLiteral(*num));
 		throw std::runtime_error(fmt::format("Couldn't parse literal token: {}", token));
 	}
+
+	static constexpr std::string_view returnLabelPrefix = "ReturnLabel[";
+	if (token.starts_with(returnLabelPrefix) && token.ends_with("]"))
+	{
+		auto const inner = token.substr(returnLabelPrefix.size(), token.size() - returnLabelPrefix.size() - 1);
+		if (auto const num = util::parseArithmetic<ControlFlow::FunctionGraphID>(inner))
+			return Slot::makeFunctionReturnLabel(*num);
+		throw std::runtime_error(fmt::format("Couldn't parse ReturnLabel token: {}", token));
+	}
+
 	throw std::runtime_error(fmt::format("Unknown token: {}", token));
 }
 
@@ -166,15 +176,20 @@ struct ShuffleTestInput
 {
 	std::optional<TestStack::Data> initial;
 	std::optional<TestStack::Data> targetStackTop;
-	std::optional<Liveness> targetStackTailSet;
+	Liveness targetStackTailSet{};
 	std::optional<size_t> targetStackSize;
 
 	bool valid() const
 	{
-		return initial.has_value() &&
+		bool const fullySpecified =
+			initial.has_value() &&
 			targetStackTop.has_value() &&
-			targetStackTailSet.has_value() &&
 			targetStackSize.has_value();
+		bool const exactMode =
+			initial.has_value() &&
+			targetStackTop.has_value() &&
+			!targetStackSize.has_value();
+		return fullySpecified || exactMode;
 	}
 
 	static ShuffleTestInput parse(std::string_view _source)
@@ -223,6 +238,15 @@ struct ShuffleTestInput
 			}
 
 		}
+
+		if (result.valid() && !result.targetStackSize)
+		{
+			yulAssert(
+				result.targetStackTailSet.empty(),
+				"Can only infer target stack size if targetStackTailSet is empty / unset."
+			);
+			result.targetStackSize = result.targetStackTop->size();
+		}
 		return result;
 	}
 };
@@ -253,6 +277,15 @@ public:
 		m_entries.push_back(TraceEntry{_operation, _stack});
 	}
 
+	void truncate(size_t const _maxEntries)
+	{
+		if (m_entries.size() > _maxEntries)
+		{
+			m_entries.resize(_maxEntries);
+			m_truncated = true;
+		}
+	}
+
 	~TraceRecorder()
 	{
 		if (m_entries.empty())
@@ -265,14 +298,30 @@ public:
 		if (maxStackDepth == 0)
 			return;
 
+		std::size_t const numColumns = std::max(maxStackDepth, m_targetStackSize);
+		std::vector columnWidths(numColumns, slotColumnWidth);
+		for (const auto& [operation, stackAfter]: m_entries)
+			for (std::size_t i = 0; i < stackAfter.size(); ++i)
+			{
+				std::string const slotStr = stackAfter[i].isJunk() ? std::string(1, junkSymbol) : slotToString(stackAfter[i]);
+				columnWidths[i] = std::max(columnWidths[i], slotStr.size() + 1);
+			}
+		for (std::size_t i = 0; i < m_targetArgs.size() && m_targetTailSize + i < numColumns; ++i)
+		{
+			std::string const slotStr = m_targetArgs[i].isJunk() ? std::string(1, junkSymbol) : slotToString(m_targetArgs[i]);
+			columnWidths[m_targetTailSize + i] = std::max(columnWidths[m_targetTailSize + i], slotStr.size() + 1);
+		}
+
 		bool const hasExcess = maxStackDepth > m_targetStackSize;
 
-		emitHeader(maxStackDepth, hasExcess);
-		emitSeparatorLine(maxStackDepth, hasExcess);
+		emitHeader(hasExcess, columnWidths);
+		emitSeparatorLine(hasExcess, columnWidths);
 		for (auto const& entry: m_entries)
-			emitDataRow(entry, hasExcess);
-		emitSeparatorLine(maxStackDepth, hasExcess);
-		emitTargetRow(hasExcess);
+			emitDataRow(entry, hasExcess, columnWidths);
+		if (m_truncated)
+			m_out << fmt::format("{:>{}}", "...", operationColumnWidth) << "|\n";
+		emitSeparatorLine(hasExcess, columnWidths);
+		emitTargetRow(hasExcess, columnWidths);
 	}
 
 private:
@@ -283,6 +332,7 @@ private:
 
 	std::ostream& m_out;
 	std::vector<TraceEntry> m_entries;
+	bool m_truncated = false;
 	TestStack::Data const& m_targetArgs;
 	Liveness const& m_targetTail;
 	size_t const m_targetStackSize;
@@ -296,29 +346,29 @@ private:
 			m_out << ' ' << _junction;
 	}
 
-	void emitHeader(size_t const _maxStackDepth, bool const _hasExcess) const
+	void emitHeader(bool const _hasExcess, std::vector<std::size_t> const& _columnWidths) const
 	{
 		m_out << fmt::format("{:>{}}", "", operationColumnWidth) << "|";
-		for (size_t i = 0; i < _maxStackDepth; ++i)
+		for (std::size_t i = 0; i < _columnWidths.size(); ++i)
 		{
 			emitSeparator(i, _hasExcess, '|');
-			m_out << fmt::format("{:>{}}", i, slotColumnWidth);
+			m_out << fmt::format("{:>{}}", i, _columnWidths[i]);
 		}
 		m_out << "\n";
 	}
 
-	void emitSeparatorLine(size_t const _maxStackDepth, bool const _hasExcess) const
+	void emitSeparatorLine(bool const _hasExcess, std::vector<std::size_t> const& _columnWidths) const
 	{
 		m_out << fmt::format("{:>{}}", "", operationColumnWidth) << '+';
-		for (size_t i = 0; i < _maxStackDepth; ++i)
+		for (std::size_t i = 0; i < _columnWidths.size(); ++i)
 		{
 			emitSeparator(i, _hasExcess, '+');
-			m_out << std::string(slotColumnWidth, '-');
+			m_out << std::string(_columnWidths[i], '-');
 		}
 		m_out << '\n';
 	}
 
-	void emitDataRow(TraceEntry const& _entry, bool const _hasExcess) const
+	void emitDataRow(TraceEntry const& _entry, bool const _hasExcess, std::vector<std::size_t> const& _columnWidths) const
 	{
 		m_out << fmt::format("{:>{}}", _entry.operation, operationColumnWidth) << "|";
 		for (size_t i = 0; i < _entry.stackAfter.size(); ++i)
@@ -326,18 +376,21 @@ private:
 			emitSeparator(i, _hasExcess, '|');
 			auto const& slot = _entry.stackAfter[i];
 			std::string slotStr = slot.isJunk() ? std::string(1, junkSymbol) : slotToString(slot);
-			m_out << fmt::format("{:>{}}", slotStr, slotColumnWidth);
+			m_out << fmt::format("{:>{}}", slotStr, _columnWidths[i]);
 		}
 		m_out << '\n';
 	}
 
-	void emitTargetRow(bool const _hasExcess) const
+	void emitTargetRow(bool const _hasExcess, std::vector<size_t> const& _columnWidths) const
 	{
 		m_out << fmt::format("{:>{}}", "(target)", operationColumnWidth) << "|";
 
 		// Print tail region with set notation
 		if (m_targetTailSize > 0 && !(m_targetTail.empty() && m_targetArgs.empty()))
 		{
+			std::size_t tailWidth = 0;
+			for (std::size_t i = 0; i < m_targetTailSize; ++i)
+				tailWidth += _columnWidths[i];
 			std::string const tailSetStr = fmt::format(
 				"{{{}}}",
 				fmt::join(
@@ -347,7 +400,7 @@ private:
 					", "
 				)
 			);
-			m_out << fmt::format("{:>{}}", tailSetStr, m_targetTailSize * slotColumnWidth);
+			m_out << fmt::format("{:>{}}", tailSetStr, tailWidth);
 		}
 
 		// Args separator
@@ -355,10 +408,11 @@ private:
 			m_out << " |";
 
 		// Print args region
-		for (auto const& slot: m_targetArgs)
+		for (std::size_t i = 0; i < m_targetArgs.size(); ++i)
 		{
+			auto const& slot = m_targetArgs[i];
 			std::string slotStr = slot.isJunk() ? std::string(1, junkSymbol) : slotToString(slot);
-			m_out << fmt::format("{:>{}}", slotStr, slotColumnWidth);
+			m_out << fmt::format("{:>{}}", slotStr, _columnWidths[m_targetTailSize + i]);
 		}
 
 		// Excess separator
@@ -399,7 +453,10 @@ Where <slot> is one of:
   lit<N>  - literal
   JUNK    - junk slot
 
-Lines starting with // are comments. Comments at the end of lines are supported, too.)";
+Lines starting with // are comments. Comments at the end of lines are supported, too.
+The targetStackTailSet defaults to empty.
+The targetStackSize defaults to the size of targetStackTop if targetStackTailSet is empty, otherwise it must be
+explicitly provided.)";
 		util::AnsiColorized out(_stream, _formatted, {util::formatting::BOLD, util::formatting::RED});
 		out	<< _linePrefix << fmt::format("Error parsing source. Expected format:") << '\n';
 
@@ -417,23 +474,45 @@ Lines starting with // are comments. Comments at the end of lines are supported,
 
 	auto stackData = *testConfig.initial;
 	std::ostringstream oss;
+	StackShufflerResult shuffleResult;
 	{
-		TraceRecorder trace(oss, *testConfig.targetStackTop, *testConfig.targetStackTailSet, *testConfig.targetStackSize);
+		TraceRecorder trace(oss, *testConfig.targetStackTop, testConfig.targetStackTailSet, *testConfig.targetStackSize);
 		trace.record("(initial)", *testConfig.initial);
-		TestStack stack(stackData, {.hook = [&](std::string const& op){ trace.record(op, stackData); }});
-		StackShuffler<StackManipulationCallbacks>::shuffle(
+		TestStack stack(stackData, {.hook = [&](std::string const& op)
+		{
+			trace.record(op, stackData);
+		}});
+		shuffleResult = StackShuffler<StackManipulationCallbacks>::shuffle(
 			stack,
 			*testConfig.targetStackTop,
-			*testConfig.targetStackTailSet,
+			testConfig.targetStackTailSet,
 			*testConfig.targetStackSize
 		);
+		if (shuffleResult.status == StackShufflerResult::Status::MaxIterationsReached)
+			trace.truncate(30);
+	}
+
+	switch (shuffleResult.status)
+	{
+	case StackShufflerResult::Status::Admissible:
+		oss << "Status: Admissible\n";
+		break;
+	case StackShufflerResult::Status::StackTooDeep:
+		oss << fmt::format("Status: StackTooDeep (culprit: {})\n", slotToString(shuffleResult.culprit));
+		break;
+	case StackShufflerResult::Status::MaxIterationsReached:
+		oss << "Status: MaxIterationsReached\n";
+		break;
+	case StackShufflerResult::Status::Continue:
+		yulAssert(false, "Unexpected Continue status from shuffle()");
 	}
 	// check stack data
+	if (shuffleResult.status == StackShufflerResult::Status::Admissible)
 	{
 		yulAssert(*testConfig.targetStackSize >= testConfig.targetStackTop->size());
 		auto const tailSize = *testConfig.targetStackSize - testConfig.targetStackTop->size();
 		yulAssert(stackData.size() == *testConfig.targetStackSize);
-		for (const auto& valueID: *testConfig.targetStackTailSet | ranges::views::keys)
+		for (const auto& valueID: testConfig.targetStackTailSet | ranges::views::keys)
 		{
 			auto const findIt = ranges::find(
 				stackData.begin(),

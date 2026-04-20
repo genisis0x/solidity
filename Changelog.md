@@ -6,10 +6,14 @@ Language Features:
 Compiler Features:
 * Commandline Interface: Disallow selecting the deprecated assembly input mode that was only accessible via `--assemble` instead of treating it as equivalent to `--strict-assembly`.
 * Commandline Interface: Introduce `--experimental` flag required for enabling the experimental mode.
+* Commandline Interface: Replace ``--ethdebug`` and ``--ethdebug-runtime`` with more granular ``--ethdebug-resources``, ``--ethdebug-compilation``, ``--ethdebug-program`` and ``--ethdebug-program-runtime`` flags. Per-contract program outputs no longer force full binary compilation.
+* EVM: Introduce experimental EVM version `@future`.
 * General: Introduce the SSA CFG codegen (experimental).
+* General: Improve performance of sanity checks throughout the compiler implementation.
 * General: Restrict the existing experimental features (`generic-solidity`, `lsp`, `ethdebug`, `eof`, `evm`, `ast-import`, `evmasm-import`, `ir-ast`, `ssa-cfg`) to experimental mode.
 * Metadata: Store the state of the experimental mode in JSON and CBOR metadata. In CBOR this broadens the meaning of the existing `experimental` field, which used to indicate only the presence of certain experimental pragmas in the source.
 * Standard JSON Interface: Introduce `settings.experimental` setting required for enabling the experimental mode.
+* Standard JSON Interface: Replace the top-level ``ethdebug`` output with ``ethdebug.resources`` and ``ethdebug.compilation``. Decouple ethdebug outputs from binary compilation so that global ethdebug outputs can be produced without generating bytecode.
 * Yul Optimizer: Improve performance of control flow side effects collector and function references resolver.
 
 Bugfixes:

@@ -14,3 +14,4 @@ object "C_6_deployed" {
         /// @src 0:60:101  "contract C {..."
     }
 }
+
