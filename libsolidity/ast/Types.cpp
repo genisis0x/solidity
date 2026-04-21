@@ -403,11 +403,7 @@ std::set<FunctionDefinition const*, ASTNode::CompareByID> Type::operatorDefiniti
 			auto const& functionDefinition = dynamic_cast<FunctionDefinition const&>(
 				*identifierPath->annotation().referencedDeclaration
 			);
-			auto const* functionType = dynamic_cast<FunctionType const*>(
-				functionDefinition.libraryFunction() ?
-				functionDefinition.typeViaContractName(Declaration::ContractNameAccessKind::Library) :
-				functionDefinition.type()
-			);
+			auto const* functionType = dynamic_cast<FunctionType const*>(functionDefinition.typeWhenAttached());
 			solAssert(functionType && !functionType->parameterTypes().empty());
 
 			size_t parameterCount = functionDefinition.parameterList().parameters().size();
@@ -427,8 +423,7 @@ MemberList::MemberMap Type::attachedFunctions(Type const& _type, ASTNode const& 
 	{
 		if (!_name)
 			_name = _function.name();
-		Type const* functionType =
-			_function.libraryFunction() ? _function.typeViaContractName(Declaration::ContractNameAccessKind::Library) : _function.type();
+		Type const* functionType = _function.typeWhenAttached();
 		solAssert(functionType, "");
 		FunctionType const* withBoundFirstArgument =
 			dynamic_cast<FunctionType const&>(*functionType).withBoundFirstArgument();

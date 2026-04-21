@@ -1062,6 +1062,7 @@ public:
 
 	Type const* type() const override;
 	Type const* typeViaContractName(ContractNameAccessKind _accessKind) const override;
+	Type const* typeWhenAttached() const;
 
 	/// @param _internal false indicates external interface is concerned, true indicates internal interface is concerned.
 	/// @returns null when it is not accessible as a function.

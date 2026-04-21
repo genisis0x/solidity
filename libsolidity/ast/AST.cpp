@@ -532,6 +532,12 @@ Type const* FunctionDefinition::typeViaContractName(ContractNameAccessKind _acce
 	}
 }
 
+Type const* FunctionDefinition::typeWhenAttached() const
+{
+	solAssert(isFree() || libraryFunction());
+	return libraryFunction() ? typeViaContractName(ContractNameAccessKind::Library) : type();
+}
+
 std::string FunctionDefinition::externalSignature() const
 {
 	return TypeProvider::function(*this)->externalSignature();
@@ -978,11 +984,7 @@ FunctionType const* UnaryOperation::userDefinedFunctionType() const
 		return nullptr;
 
 	FunctionDefinition const* userDefinedFunction = *annotation().userDefinedFunction;
-	return dynamic_cast<FunctionType const*>(
-		userDefinedFunction->libraryFunction() ?
-		userDefinedFunction->typeViaContractName(Declaration::ContractNameAccessKind::Library) :
-		userDefinedFunction->type()
-	);
+	return dynamic_cast<FunctionType const*>(userDefinedFunction->typeWhenAttached());
 }
 
 FunctionType const* BinaryOperation::userDefinedFunctionType() const
@@ -991,11 +993,7 @@ FunctionType const* BinaryOperation::userDefinedFunctionType() const
 		return nullptr;
 
 	FunctionDefinition const* userDefinedFunction = *annotation().userDefinedFunction;
-	return dynamic_cast<FunctionType const*>(
-		userDefinedFunction->libraryFunction() ?
-		userDefinedFunction->typeViaContractName(Declaration::ContractNameAccessKind::Library) :
-		userDefinedFunction->type()
-	);
+	return dynamic_cast<FunctionType const*>(userDefinedFunction->typeWhenAttached());
 }
 
 BinaryOperationAnnotation& BinaryOperation::annotation() const
