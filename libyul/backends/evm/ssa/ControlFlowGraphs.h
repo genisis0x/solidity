@@ -23,6 +23,8 @@
 
 #include <libyul/AST.h>
 
+#include <optional>
+
 namespace solidity::yul::ssa
 {
 
@@ -69,7 +71,15 @@ struct ControlFlowGraphs
 		return output.str();
 	}
 
+	/// Returns the reserved memory base offset declared by the `memoryguard` builtin. A non-null memory guard value
+	/// implies that the program is considered memory-safe
+	std::optional<u256> memoryGuard() const;
+
 	std::vector<std::unique_ptr<SSACFG>> functionGraphs{};
+	std::vector<std::tuple<Scope::Function const*, SSACFG const*>> functionGraphMapping{};
+
+private:
+	mutable std::optional<std::optional<u256>> m_memoryGuardCache = std::nullopt;
 };
 
 }
