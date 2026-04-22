@@ -49,12 +49,19 @@ public:
 	using DebugInfo = SSACFGDebugInfo;
 
 	explicit SSACFG(
-		EVMDialect const& _evmVersion,
+		EVMDialect const& _evmDialect,
 		std::unique_ptr<DebugInfo> _debugInfo = nullptr
 	):
-		evmDialect(_evmVersion),
+		evmDialect(_evmDialect),
 		debugInfo(std::move(_debugInfo))
-	{}
+	{
+		// memoryguard is only available for yul objects, not for raw inline assembly. but we never want to
+		// use inline assembly dialect for SSA-CFG
+		yulAssert(
+			_evmDialect.findBuiltin("memoryguard").has_value(),
+			"SSA-CFG codegen is only valid over dialects that possess memoryguard as builtin."
+		);
+	}
 
 	SSACFG(SSACFG const&) = delete;
 	SSACFG(SSACFG&&) = delete;
