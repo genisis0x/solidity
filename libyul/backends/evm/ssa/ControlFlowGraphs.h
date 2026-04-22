@@ -23,6 +23,7 @@
 
 #include <libyul/AST.h>
 
+#include <cstdint>
 #include <optional>
 
 namespace solidity::yul::ssa
@@ -37,6 +38,20 @@ struct ControlFlowGraphsLiveness{
 	std::vector<std::unique_ptr<LivenessAnalysis>> cfgLiveness;
 
 	std::string toDot() const;
+};
+
+/// Identifies which function graphs lie on some call-graph cycle, i.e., functions whose
+/// activations may overlap on the call stack via direct or mutual recursion. Values defined in
+/// such functions cannot be spilled to fixed memory offsets.
+struct ControlFlowRecursion
+{
+	explicit ControlFlowRecursion(ControlFlowGraphs const& _controlFlow);
+
+	std::reference_wrapper<ControlFlowGraphs const> controlFlow;
+
+	/// Indexed by ``ControlFlowGraphs::FunctionGraphID``: 1 iff the graph lies on some call-graph cycle,
+	/// else 0. The main graph entry is always 0 (no caller can reach it).
+	std::vector<std::uint8_t> recursive;
 };
 
 struct ControlFlowGraphs

@@ -23,9 +23,50 @@
 #include <range/v3/view/transform.hpp>
 #include <range/v3/range/conversion.hpp>
 
+#include <algorithm>
+
 using namespace solidity;
 using namespace solidity::yul;
 using namespace solidity::yul::ssa;
+
+namespace
+{
+/// DFS-with-path-stack cycle finder over the call graph, mirroring the classic
+/// ``CallGraphCycleFinder`` in ``libyul/optimiser/CallGraphGenerator.cpp`` but operating entirely
+/// on ``FunctionGraphID``s instead of ``Scope::Function const*``.
+struct CycleFinder
+{
+	using FunctionGraphID = ControlFlowGraphs::FunctionGraphID;
+
+	std::vector<std::vector<FunctionGraphID>> const& callees;
+	std::vector<std::uint8_t> recursive;
+	std::vector<std::uint8_t> visited;
+	std::vector<FunctionGraphID> currentPath{};
+
+	explicit CycleFinder(std::vector<std::vector<FunctionGraphID>> const& _callees):
+		callees(_callees),
+		recursive(_callees.size(), 0),
+		visited(_callees.size(), 0)
+	{}
+
+	void visit(FunctionGraphID _id)
+	{
+		if (visited[_id])
+			return;
+		if (auto it = std::find(currentPath.begin(), currentPath.end(), _id); it != currentPath.end())
+			for (auto pathIt = it; pathIt != currentPath.end(); ++pathIt)
+				recursive[*pathIt] = 1;
+		else
+		{
+			currentPath.emplace_back(_id);
+			for (FunctionGraphID callee: callees[_id])
+				visit(callee);
+			currentPath.pop_back();
+			visited[_id] = 1;
+		}
+	}
+};
+}
 
 ControlFlowGraphsLiveness::ControlFlowGraphsLiveness(ControlFlowGraphs const& _controlFlow):
 	controlFlowGraphs(_controlFlow),
@@ -37,7 +78,39 @@ std::string ControlFlowGraphsLiveness::toDot() const
 	return controlFlowGraphs.get().toDot(this);
 }
 
-std::optional<u256> ControlFlow::memoryGuard() const
+ControlFlowRecursion::ControlFlowRecursion(ControlFlowGraphs const& _controlFlow):
+	controlFlow(_controlFlow)
+{
+	using FunctionGraphID = ControlFlowGraphs::FunctionGraphID;
+	auto const numGraphs = static_cast<FunctionGraphID>(_controlFlow.functionGraphs.size());
+
+	// Adjacency: callees[callerId] = list of callee graph ids. All lookups are by graph id; we
+	// never materialize a Scope::Function-keyed container.
+	std::vector<std::vector<FunctionGraphID>> callees(numGraphs);
+	for (FunctionGraphID callerId = 0; callerId < numGraphs; ++callerId)
+	{
+		SSACFG const& graph = *_controlFlow.functionGraphs[callerId];
+		for (SSACFG::BlockId::ValueType blockIndex = 0; blockIndex < graph.numBlocks(); ++blockIndex)
+			for (SSACFG::InstId const operationId: graph.block(SSACFG::BlockId{blockIndex}).operations)
+			{
+				auto const& op = graph.operation(operationId);
+				auto const* call = std::get_if<SSACFG::Call>(&op.kind);
+				if (!call)
+					continue;
+				FunctionGraphID const calleeId = call->graphID;
+				yulAssert(calleeId < numGraphs, "Callee has no corresponding function graph.");
+				callees[callerId].emplace_back(calleeId);
+			}
+	}
+
+	CycleFinder finder{callees};
+	// Visit every graph so we also cover disconnected cycles
+	for (FunctionGraphID id = 0; id < numGraphs; ++id)
+		finder.visit(id);
+	recursive = std::move(finder.recursive);
+}
+
+std::optional<u256> ControlFlowGraphs::memoryGuard() const
 {
 	if (functionGraphs.empty())
 		return std::nullopt;
@@ -46,23 +119,22 @@ std::optional<u256> ControlFlow::memoryGuard() const
 		return *m_memoryGuardCache;
 
 	EVMDialect const& dialect = functionGraphs.front()->evmDialect;
-	BuiltinFunction const& memoryGuardBuiltin = dialect.builtin(*dialect.findBuiltin("memoryguard"));
+	BuiltinHandle const memoryGuardHandle = *dialect.findBuiltin("memoryguard");
 
 	std::optional<u256> offset;
 	for (auto const& graph: functionGraphs)
 		for (SSACFG::BlockId::ValueType blockIndex = 0; blockIndex < graph->numBlocks(); ++blockIndex)
-			for (SSACFG::OperationId const operationId: graph->block(SSACFG::BlockId{blockIndex}).operations)
+			for (SSACFG::InstId const operationId: graph->block(SSACFG::BlockId{blockIndex}).operations)
 			{
 				auto const& op = graph->operation(operationId);
 				auto const* builtinCall = std::get_if<SSACFG::BuiltinCall>(&op.kind);
-				if (!builtinCall || &builtinCall->builtin.get() != &memoryGuardBuiltin)
+				if (!builtinCall || builtinCall->builtin != memoryGuardHandle)
 					continue;
 
-				FunctionCall const& astCall = builtinCall->call.get();
-				yulAssert(astCall.arguments.size() == 1);
-				Literal const* literal = std::get_if<Literal>(&astCall.arguments.front());
-				yulAssert(literal && literal->kind == LiteralKind::Number);
-				u256 const argument = literal->value.value();
+				yulAssert(builtinCall->literalArguments.size() == 1);
+				Literal const& literal = builtinCall->literalArguments.front();
+				yulAssert(literal.kind == LiteralKind::Number);
+				u256 const argument = literal.value.value();
 
 				if (!offset)
 					offset = argument;

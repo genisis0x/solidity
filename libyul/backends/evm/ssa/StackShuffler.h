@@ -962,7 +962,7 @@ template<StackManipulationCallbackConcept Callbacks, std::size_t ReachableStackD
 ShuffleWithSpillingResult<Callbacks> shuffleWithSpilling(
 	StackData _initialStack,
 	StackData const& _targetArgs,
-	LivenessAnalysis::LivenessData const& _liveOut,
+	StackSlotLiveness const& _liveOut,
 	std::size_t _targetSize,
 	Callbacks _initialCallbacks,
 	SpilledVariables& _spillSet
