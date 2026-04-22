@@ -539,23 +539,14 @@ explicitly provided.)";
 	// the final spill set. Each iteration starts from the initial stack and adds the culprit of a
 	// recoverable StackTooDeep to the spill set.
 	if (testConfig.allowSpilling)
-		while (true)
-		{
-			auto scratch = *testConfig.initial;
-			TestStack stack(scratch, {});
-			auto const result = StackShuffler<StackManipulationCallbacks>::shuffle(
-				stack,
-				*testConfig.targetStackTop,
-				testConfig.targetStackTailSet,
-				*testConfig.targetStackSize,
-				&spillSet
-			);
-			if (
-				result.status != StackShufflerResult::Status::StackTooDeep
-			)
-				break;
-			spillSet.spill(result.culprit.valueID());
-		}
+		shuffleWithSpilling<StackManipulationCallbacks>(
+			*testConfig.initial,
+			*testConfig.targetStackTop,
+			testConfig.targetStackTailSet,
+			*testConfig.targetStackSize,
+			{},
+			spillSet
+		);
 
 	// Final shuffle with the (possibly pre-populated) spill set, recording the trace.
 	{
@@ -624,7 +615,6 @@ explicitly provided.)";
 		}
 	}
 	m_obtainedResult = oss.str();
-
 
 	return checkResult(_stream, _linePrefix, _formatted);
 }

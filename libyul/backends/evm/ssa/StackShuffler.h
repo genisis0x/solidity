@@ -950,4 +950,54 @@ private:
 	}
 };
 
+template<StackManipulationCallbackConcept Callbacks>
+struct ShuffleWithSpillingResult
+{
+	StackData stack;
+	Callbacks callbacks;
+};
+
+/// Repeatedly shuffles toward the target, adding the reported culprit to `_spillSet` on every StackTooDeep
+template<StackManipulationCallbackConcept Callbacks, std::size_t ReachableStackDepth = 16>
+ShuffleWithSpillingResult<Callbacks> shuffleWithSpilling(
+	StackData _initialStack,
+	StackData const& _targetArgs,
+	LivenessAnalysis::LivenessData const& _liveOut,
+	std::size_t _targetSize,
+	Callbacks _initialCallbacks,
+	SpilledVariables& _spillSet
+)
+{
+	StackData data;
+	Callbacks callbacks = _initialCallbacks;
+	StackShufflerResult result;
+	do
+	{
+		data = _initialStack;
+		callbacks = _initialCallbacks;
+		Stack<Callbacks> stack(data, std::move(callbacks));
+		result = StackShuffler<Callbacks, ReachableStackDepth>::shuffle(
+			stack, _targetArgs, _liveOut, _targetSize, &_spillSet
+		);
+		callbacks = stack.callbacks();
+		switch (result.status)
+		{
+		case StackShufflerResult::Status::Continue:
+			yulAssert(false);
+		case StackShufflerResult::Status::Admissible:
+			break;
+		case StackShufflerResult::Status::StackTooDeep:
+			yulAssert(result.culprit.isValueID() && !result.culprit.isLiteralValueID());
+			yulAssert(!_spillSet.isSpilled(result.culprit.valueID()));
+			_spillSet.spill(result.culprit.valueID());
+			break;
+		case StackShufflerResult::Status::MaxIterationsReached:
+			yulAssert(false, "shuffleWithSpilling: max iterations reached");
+		}
+	}
+	while (result.status == StackShufflerResult::Status::StackTooDeep);
+	yulAssert(result.status == StackShufflerResult::Status::Admissible);
+	return {std::move(data), std::move(callbacks)};
+}
+
 }

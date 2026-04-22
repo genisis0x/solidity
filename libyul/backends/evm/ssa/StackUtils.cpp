@@ -100,41 +100,14 @@ std::size_t solidity::yul::ssa::findOptimalTargetSize
 	std::size_t const startSize = std::max(pivot, minSize);
 	static std::size_t constexpr maxUpwardExpansion = 32;
 
-	StackData data;
-	data.reserve(startSize + maxUpwardExpansion);
 	auto const evaluateCost = [&](std::size_t const _targetSize) -> std::size_t
 	{
-		StackShufflerResult result;
 		SpilledVariables spillSet;
-		OpsCountingCallbacks callbacks;
-		do
-		{
-			data = _stackData;
-			Stack<OpsCountingCallbacks> countOpsStack(data, {});
-			result = StackShuffler<OpsCountingCallbacks>::shuffle(countOpsStack, _targetArgs, _targetLiveOut, _targetSize, &spillSet);
-			callbacks = countOpsStack.callbacks();
-			switch (result.status)
-			{
-			case StackShufflerResult::Status::Continue:
-				yulAssert(false);
-			case StackShufflerResult::Status::Admissible:
-				break;
-			case StackShufflerResult::Status::StackTooDeep:
-			{
-				yulAssert(result.culprit.isValueID() && !result.culprit.isLiteralValueID());
-				yulAssert(!spillSet.isSpilled(result.culprit.valueID()));
-				spillSet.spill(result.culprit.valueID());
-				break;
-			}
-			case StackShufflerResult::Status::MaxIterationsReached:
-				break;
-			}
-		}
-		while (result.status == StackShufflerResult::Status::StackTooDeep);
-		yulAssert(data.size() == _targetSize);
-		yulAssert(result.status == StackShufflerResult::Status::Admissible);
-		std::size_t const cost = callbacks.numOps + 1000 * spillSet.numSpilled();
-		return cost;
+		auto const result = shuffleWithSpilling<OpsCountingCallbacks>(
+			_stackData, _targetArgs, _targetLiveOut, _targetSize, {}, spillSet
+		);
+		yulAssert(result.stack.size() == _targetSize);
+		return result.callbacks.numOps + 1000 * spillSet.numSpilled();
 	};
 
 	std::size_t bestCost = evaluateCost(startSize);
