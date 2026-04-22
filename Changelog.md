@@ -20,8 +20,7 @@ Bugfixes:
 * Yul: Fix incorrect serialization of Yul object names containing double quotes and escape sequences, producing output that could not be parsed as valid Yul.
 * Yul EVM Code Transform: Improve stack shuffler performance by fixing a BFS deduplication issue.
 * Parser: Treat invalid UTF-8 sequences in comments and Natspec as errors. Such sequences used to be ignored and would cause a crash if they ended up inside JSON output.
-* Parser: Fix inaccurate or vague error messages in errors triggered by invalid UTF-8 in comments.
-* Standard JSON: Fix invalid UTF-8 bytes in the `formattedMessage` field of errors when a source location excerpt contains invalid UTF-8. The field now falls back to the plain message in that case.
+* Standard JSON: Fix a crash when any JSON output field contains invalid UTF-8 bytes. Invalid byte sequences are now replaced with U+FFFD during JSON serialization instead of aborting with an exception.
 
 
 ### 0.8.34 (2026-02-18)
