@@ -302,12 +302,12 @@ void IRGeneratorForStatements::endVisit(FunctionCall const& _functionCall)
 		{
 		case Builtins::FromBool:
 		case Builtins::Identity:
-			solAssert(_functionCall.arguments().size() == 1);
-			m_code << "let " << IRNames::localVariable(_functionCall) << " := " << IRNames::localVariable(*_functionCall.arguments().front()) << "\n";
+			solAssert(_functionCall.sortedArguments().size() == 1);
+			m_code << "let " << IRNames::localVariable(_functionCall) << " := " << IRNames::localVariable(*_functionCall.sortedArguments().front()) << "\n";
 			return;
 		case Builtins::ToBool:
-			solAssert(_functionCall.arguments().size() == 1);
-			m_code << "let " << IRNames::localVariable(_functionCall) << " := iszero(iszero(" << IRNames::localVariable(*_functionCall.arguments().front()) << "))\n";
+			solAssert(_functionCall.sortedArguments().size() == 1);
+			m_code << "let " << IRNames::localVariable(_functionCall) << " := iszero(iszero(" << IRNames::localVariable(*_functionCall.sortedArguments().front()) << "))\n";
 			return;
 		}
 		solAssert(false);
@@ -322,7 +322,7 @@ void IRGeneratorForStatements::endVisit(FunctionCall const& _functionCall)
 	if (functionDefinition->experimentalReturnExpression())
 		m_code << "let " << IRNames::localVariable(_functionCall) << " := ";
 	m_code << IRNames::function(*m_context.env, *functionDefinition, functionType) << "(";
-	auto const& arguments = _functionCall.arguments();
+	auto const& arguments = _functionCall.sortedArguments();
 	if (arguments.size() > 1)
 		for (auto arg: arguments | ranges::views::drop_last(1))
 			m_code << IRNames::localVariable(*arg) << ", ";
