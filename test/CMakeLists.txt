@@ -102,6 +102,8 @@ set(libsolidity_sources
     libsolidity/SemVerMatcher.cpp
     libsolidity/SMTCheckerTest.cpp
     libsolidity/SMTCheckerTest.h
+    libsolidity/StandardJSONTest.cpp
+    libsolidity/StandardJSONTest.h
     libsolidity/SolidityCompiler.cpp
     libsolidity/SolidityEndToEndTest.cpp
     libsolidity/SolidityExecutionFramework.cpp

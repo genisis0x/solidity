@@ -13,14 +13,13 @@ contract C {
 //     },
 //     "name": "C"
 // }
-//
 // C.creation.instructions[0]:
 // {
 //     "context": {
 //         "code": {
 //             "range": {
-//                 "length": 69,
-//                 "offset": 61
+//                 "length": 85,
+//                 "offset": 59
 //             },
 //             "source": {
 //                 "id": 0

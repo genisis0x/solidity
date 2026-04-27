@@ -8,15 +8,14 @@ contract C {
     }
 }
 // ----
-// C.creation.instructions[0].context.code.range.offset: 62
+// C.creation.instructions[0].context.code.range.offset: 59
 // C.creation.instructions[0].context.code.range.length: 162
 // C.creation.instructions[0].context.code.source.id: 0
-//
 // C.runtime.instructions[0].context.code:
 // {
 //     "range": {
 //         "length": 162,
-//         "offset": 62
+//         "offset": 59
 //     },
 //     "source": {
 //         "id": 0
