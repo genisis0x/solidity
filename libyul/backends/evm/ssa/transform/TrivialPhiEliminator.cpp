@@ -20,13 +20,8 @@
 
 #include <libyul/backends/evm/ssa/SSACFG.h>
 
-#include <libsolutil/Visitor.h>
-
-#include <range/v3/algorithm/any_of.hpp>
-#include <range/v3/algorithm/count_if.hpp>
-#include <range/v3/algorithm/replace.hpp>
-
-#include <algorithm>
+#include <cstdint>
+#include <map>
 #include <vector>
 
 using namespace solidity;
@@ -36,243 +31,100 @@ using namespace solidity::yul::ssa;
 namespace
 {
 
-struct TrivialPhiEliminator
+/// Path-compressing resolve for Identity chains
+InstId resolve(SSACFG const& _cfg, InstId _id)
 {
-	SSACFG& cfg;
-
-	// phi_id -> values of upsilons targeting this phi
-	std::vector<std::vector<InstId>> upsilonValuesForPhi;
-	// phi_id -> blocks containing upsilons targeting this phi
-	std::vector<std::vector<SSACFG::BlockId>> phiTargetBlocks;
-	// phi_id -> phis whose upsilon values reference this phi
-	std::vector<std::vector<InstId>> reversePhiUpsilonValues;
-	// phi_id -> canonical replacement (default = no substitution)
-	std::vector<InstId> substitution;
-
-	explicit TrivialPhiEliminator(SSACFG& _cfg): cfg(_cfg) {}
-
-	void run()
+	while (_id.hasValue() && _cfg.kindOf(_id) == InstOpcode::Identity)
 	{
-		cleanUnreachableUpsilons();
-		buildIndices();
-		substituteDeadPhis();
-
-		// run elimination repeatedly until convergence
-		auto substitutionsBeforeEliminateAll = static_cast<std::size_t>(ranges::count_if(substitution, [](auto const& s) { return s.hasValue(); }));
-		auto substitutionsAfterEliminateAll = substitutionsBeforeEliminateAll;
-		do
-		{
-			substitutionsBeforeEliminateAll = substitutionsAfterEliminateAll;
-			eliminateAll();
-			substitutionsAfterEliminateAll = static_cast<std::size_t>(ranges::count_if(substitution, [](auto const& s) { return s.hasValue(); }));
-		} while (substitutionsAfterEliminateAll > substitutionsBeforeEliminateAll);
-		applySubstitutions();
+		auto const& inst = _cfg.inst(_id);
+		yulAssert(inst.inputs.size() == 1);
+		_id = inst.inputs[0];
 	}
-
-private:
-	void cleanUnreachableUpsilons()
-	{
-		for (SSACFG::BlockId blockId{0}; blockId.value < cfg.numBlocks(); ++blockId.value)
-		{
-			auto& block = cfg.block(blockId);
-			std::erase_if(block.instructions, [this](InstId const _id) {
-				auto const& inst = cfg.inst(_id);
-				return inst.isUpsilon() && cfg.isUnreachable(inst.inputs.at(0));
-			});
-		}
-	}
-
-	void buildIndices()
-	{
-		for (SSACFG::BlockId blockId{0}; blockId.value < cfg.numBlocks(); ++blockId.value)
-		{
-			cfg.forEachUpsilon(cfg.block(blockId), [&](InstId const instId, SSACFG::Inst const& inst) {
-				InstId const phi = cfg.upsilonPhi(instId);
-				InstId const value = inst.inputs.at(0);
-				auto const phiIdx = phi.value;
-				if (phiIdx >= upsilonValuesForPhi.size())
-				{
-					upsilonValuesForPhi.resize(phiIdx + 1);
-					phiTargetBlocks.resize(phiIdx + 1);
-				}
-				if (phiIdx >= reversePhiUpsilonValues.size())
-					reversePhiUpsilonValues.resize(phiIdx + 1);
-				upsilonValuesForPhi[phiIdx].push_back(value);
-				phiTargetBlocks[phiIdx].push_back(blockId);
-				if (cfg.isPhi(value))
-				{
-					auto const valIdx = value.value;
-					if (valIdx >= reversePhiUpsilonValues.size())
-						reversePhiUpsilonValues.resize(valIdx + 1);
-					reversePhiUpsilonValues[valIdx].push_back(phi);
-				}
-			});
-		}
-		substitution.resize(std::max(upsilonValuesForPhi.size(), size_t{1}));
-	}
-
-	/// Phis that have no upsilons targeting them are dead — either in unreachable blocks
-	/// or orphaned from cycle-breaking.
-	/// Replace references to them with unreachableValue in the upsilon value index so they don't block triviality
-	/// detection.
-	void substituteDeadPhis()
-	{
-		auto const unreachable = cfg.unreachableValue();
-		for (auto& upsilonValues: upsilonValuesForPhi)
-			for (auto& val: upsilonValues)
-				if (cfg.isPhi(val))
-				{
-					auto const idx = val.value;
-					bool const hasUpsilons = idx < upsilonValuesForPhi.size() && !upsilonValuesForPhi[idx].empty();
-					if (!hasUpsilons)
-						val = unreachable;
-				}
-	}
-
-	void eliminateAll()
-	{
-		for (SSACFG::BlockId blockId{0}; blockId.value < cfg.numBlocks(); ++blockId.value)
-		{
-			// Snapshot the phi InstIds because tryRemove mutates block.instructions.
-			std::vector<InstId> phis;
-			cfg.forEachPhi(cfg.block(blockId), [&](InstId const instId, SSACFG::Inst const&) {
-				phis.push_back(instId);
-			});
-			for (auto const phi: phis)
-				tryRemove(phi);
-		}
-	}
-
-	void tryRemove(InstId _phi)
-	{
-		auto const phiIdx = _phi.value;
-
-		// early exit if this phi was already processed
-		if (phiIdx < substitution.size() && substitution[phiIdx].hasValue())
-			return;
-
-		// check triviality and canonicalize arguments to account for already-substituted phis;
-		// skip self-references and unreachable values
-		InstId same;
-		if (phiIdx < upsilonValuesForPhi.size())
-			for (auto const arg: upsilonValuesForPhi[phiIdx])
-			{
-				auto const resolved = canonicalize(arg);
-				if (resolved == same || resolved == _phi || cfg.isUnreachable(resolved))
-					continue;
-				if (same.hasValue())
-					return; // non-trivial
-				same = resolved;
-			}
-
-		if (!same.hasValue())
-			// phi has only self-references (unreachable cycle), or no upsilons at all
-			same = cfg.unreachableValue();
-
-		// remove the phi from its defining block
-		{
-			auto& block = cfg.block(cfg.inst(_phi).block);
-			yulAssert(cfg.isPhi(_phi));
-			std::erase(block.instructions, _phi);
-		}
-
-		// record the substitution
-		if (phiIdx >= substitution.size())
-			substitution.resize(phiIdx + 1);
-		substitution[phiIdx] = same;
-
-		// update upsilon.value fields and `upsilonValuesForPhi` for all phis whose upsilons reference `_phi` as a value
-		std::vector<InstId> cascades;
-		if (phiIdx < reversePhiUpsilonValues.size())
-		{
-			for (auto const targetPhi: reversePhiUpsilonValues[phiIdx])
-			{
-				// update upsilonValuesForPhi[targetPhi]: _phi with same
-				auto& vals = upsilonValuesForPhi[targetPhi.value];
-				ranges::replace(vals, _phi, same);
-				if (targetPhi.value < phiTargetBlocks.size())
-					for (auto const blockId: phiTargetBlocks[targetPhi.value])
-						cfg.forEachUpsilon(cfg.block(blockId), [&](InstId const instId, SSACFG::Inst& inst) {
-							if (cfg.upsilonPhi(instId) == targetPhi && inst.inputs.at(0) == _phi)
-								inst.inputs[0] = same;
-						});
-				// maintain reverse index
-				if (cfg.isPhi(same))
-				{
-					if (same.value >= reversePhiUpsilonValues.size())
-						reversePhiUpsilonValues.resize(same.value + 1);
-					reversePhiUpsilonValues[same.value].push_back(targetPhi);
-				}
-				cascades.push_back(targetPhi);
-			}
-			reversePhiUpsilonValues[phiIdx].clear();
-		}
-
-		// erase all upsilons targeting the removed phi.
-		if (phiIdx < phiTargetBlocks.size())
-		{
-			for (auto const blockId: phiTargetBlocks[phiIdx])
-			{
-				auto& block = cfg.block(blockId);
-				std::erase_if(block.instructions, [this, _phi](InstId _id) {
-					auto const& ins = cfg.inst(_id);
-					return ins.isUpsilon() && cfg.upsilonPhi(_id) == _phi;
-				});
-			}
-			phiTargetBlocks[phiIdx].clear();
-		}
-
-		for (auto const cascadingPhi: cascades)
-			tryRemove(cascadingPhi);
-	}
-
-	InstId canonicalize(InstId const _v)
-	{
-		auto const idx = _v.value;
-		if (idx >= substitution.size())
-			return _v;
-		auto& sub = substitution[idx];
-		if (!sub.hasValue())
-			return _v;
-		// path compression
-		sub = canonicalize(sub);
-		return sub;
-	}
-
-	void applySubstitutions()
-	{
-		if (!ranges::any_of(substitution, [](InstId const& _sub) { return _sub.hasValue(); }))
-			return;
-
-		for (SSACFG::BlockId blockId{0}; blockId.value < cfg.numBlocks(); ++blockId.value)
-		{
-			auto& block = cfg.block(blockId);
-			for (InstId const instId: block.instructions)
-			{
-				auto& inst = cfg.inst(instId);
-				if (inst.isUpsilon())
-					inst.inputs[0] = canonicalize(inst.inputs[0]);
-				else if (inst.isOperation())
-					for (auto& input: inst.inputs)
-						input = canonicalize(input);
-			}
-			std::visit(solidity::util::GenericVisitor{
-				[&](SSACFG::BasicBlock::FunctionReturn& r) {
-					for (auto& v: r.returnValues)
-						v = canonicalize(v);
-				},
-				[&](SSACFG::BasicBlock::ConditionalJump& c) { c.condition = canonicalize(c.condition); },
-				[](SSACFG::BasicBlock::Jump&) {},
-				[](SSACFG::BasicBlock::MainExit&) {},
-				[](SSACFG::BasicBlock::Terminated&) {}
-			}, block.exit);
-		}
-	}
-};
+	return _id;
+}
 
 }
 
 void transform::eliminateTrivialPhis(SSACFG& _cfg)
 {
-	TrivialPhiEliminator(_cfg).run();
+	// Drop upsilons whose value is Unreachable (dead control-flow predecessor)
+	for (BlockId blockId{0}; blockId.value < _cfg.numBlocks(); ++blockId.value)
+		for (InstId const id: _cfg.block(blockId).instructions)
+		{
+			auto const& inst = _cfg.inst(id);
+			if (inst.isUpsilon() && _cfg.isUnreachable(inst.inputs[0]))
+				_cfg.replaceWithNop(id);
+		}
+
+	// Build per-phi indices
+	std::map<InstId, std::vector<InstId>> upsilonsTargeting;
+	std::map<InstId, std::vector<InstId>> phisReferencing;
+	std::vector<InstId> worklist;
+	for (std::uint32_t i = 0; i < _cfg.instructionStore().numInsts(); ++i)
+	{
+		InstId const id{i};
+		auto const& inst = _cfg.inst(id);
+		if (inst.isPhi())
+			worklist.push_back(id);
+		else if (inst.isUpsilon())
+		{
+			InstId const phi = _cfg.upsilonPhi(id);
+			upsilonsTargeting[phi].push_back(id);
+			InstId const value = inst.inputs[0];
+			if (_cfg.kindOf(value) == InstOpcode::Phi)
+				phisReferencing[value].push_back(phi);
+		}
+	}
+
+	while (!worklist.empty())
+	{
+		InstId const phi = worklist.back();
+		worklist.pop_back();
+		if (_cfg.kindOf(phi) != InstOpcode::Phi)
+			continue;
+
+		InstId same;
+		bool nontrivial = false;
+		auto const it = upsilonsTargeting.find(phi);
+		if (it != upsilonsTargeting.end())
+			for (InstId const ups: it->second)
+			{
+				if (_cfg.kindOf(ups) == InstOpcode::Nop)
+					continue;
+				InstId const value = resolve(_cfg, _cfg.inst(ups).inputs[0]);
+				if (value == phi || _cfg.isUnreachable(value))
+					continue;
+				if (same.hasValue() && value != same)
+				{
+					nontrivial = true;
+					break;
+				}
+				same = value;
+			}
+		if (nontrivial)
+			continue;
+		if (!same.hasValue())
+			// Phi has no live, non-self upsilons — it's an orphan in dead code.
+			same = _cfg.unreachableValue();
+
+		_cfg.replaceWithIdentity(phi, same);
+		if (it != upsilonsTargeting.end())
+			for (InstId const ups: it->second)
+				if (_cfg.kindOf(ups) == InstOpcode::Upsilon)
+					_cfg.replaceWithNop(ups);
+
+		// Re-queue dependents and forward `phi`'s reverse-dep entries onto `same`. If `same` is itself a Phi that
+		// gets eliminated later, those dependents must be reevaluated
+		auto const depsIt = phisReferencing.find(phi);
+		if (depsIt != phisReferencing.end())
+		{
+			for (InstId const dep: depsIt->second)
+				worklist.push_back(dep);
+			if (_cfg.kindOf(same) == InstOpcode::Phi)
+			{
+				auto& sameDeps = phisReferencing[same];
+				sameDeps.insert(sameDeps.end(), depsIt->second.begin(), depsIt->second.end());
+			}
+		}
+	}
 }

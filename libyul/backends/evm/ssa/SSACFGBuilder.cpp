@@ -21,6 +21,7 @@
 
 #include <libyul/backends/evm/ssa/SSACFGBuilder.h>
 
+#include <libyul/backends/evm/ssa/transform/IdentityRemover.h>
 #include <libyul/backends/evm/ssa/transform/TrivialPhiEliminator.h>
 #include <libyul/backends/evm/ssa/transform/UnreachableBlockCleaner.h>
 
@@ -89,6 +90,7 @@ std::unique_ptr<ControlFlowGraphs> SSACFGBuilder::build(
 	mainGraph.block(builder.m_currentBlock).exit = SSACFG::BasicBlock::MainExit{};
 	transform::cleanUnreachableBlocks(mainGraph);
 	transform::eliminateTrivialPhis(mainGraph);
+	transform::removeIdentities(mainGraph);
 	return controlFlowGraphs;
 }
 
@@ -141,6 +143,7 @@ void SSACFGBuilder::buildFunctionGraph(
 	builder(Leave{debugDataOf(*_functionDefinition)});
 	transform::cleanUnreachableBlocks(cfg);
 	transform::eliminateTrivialPhis(cfg);
+	transform::removeIdentities(cfg);
 }
 
 void SSACFGBuilder::operator()(ExpressionStatement const& _expressionStatement)
