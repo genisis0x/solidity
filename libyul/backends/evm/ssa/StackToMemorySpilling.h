@@ -31,14 +31,14 @@ class SpilledVariables
 {
 public:
 
-	void spill(SSACFG::ValueId const _valueId)
+	void spill(InstId const _valueId)
 	{
 		bool const emplaced = m_spillSet.try_emplace(_valueId, m_currentSpillSlot).second;
 		yulAssert(emplaced, fmt::format("can't spill a value ({}) twice", _valueId));
 		++m_currentSpillSlot;
 	}
 
-	bool isSpilled(SSACFG::ValueId const _valueId) const
+	bool isSpilled(InstId const _valueId) const
 	{
 		return m_spillSet.contains(_valueId);
 	}
@@ -54,6 +54,6 @@ public:
 	}
 private:
 	std::uint32_t m_currentSpillSlot{0};
-	std::map<SSACFG::ValueId, std::uint32_t> m_spillSet;  // map valueId -> ssa-cfg-local slot
+	std::map<InstId, std::uint32_t> m_spillSet;  // map valueId -> ssa-cfg-local slot
 };
 }

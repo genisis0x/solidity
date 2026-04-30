@@ -133,7 +133,7 @@ bool State::requiredInArgs(StackSlot const& _slot) const
 
 bool State::requiredInTail(StackSlot const& _slot) const
 {
-	if (!_slot.isValueID() || !m_target.liveOut.contains(_slot))
+	if (!_slot.isValue() || !m_target.liveOut.contains(_slot))
 		return false;
 	// Spilled values can be rematerialized, so they need not occupy a tail slot.
 	return !slotIsSpilled(_slot);

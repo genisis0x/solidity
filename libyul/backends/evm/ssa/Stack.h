@@ -77,7 +77,7 @@ class StackSlot
 public:
 	enum struct Kind: std::uint8_t
 	{
-		ValueID, // u32
+		Value, // u32 InstId
 		Junk, // empty
 		FunctionCallReturnLabel, // index into corresponding stack layout's call sites
 		FunctionReturnLabel // identifying the function graph via ControlFlowGraphs
@@ -89,9 +89,9 @@ public:
 	constexpr StackSlot& operator=(StackSlot const&) = default;
 	constexpr StackSlot& operator=(StackSlot&&) = default;
 
-	constexpr bool isValueID() const noexcept { return kind() == Kind::ValueID; }
-	constexpr bool isLiteralValueID() const noexcept { return m_valueIdOpcode == InstOpcode::Const; }
-	constexpr bool isPhiValueID() const noexcept { return m_valueIdOpcode == InstOpcode::Phi; }
+	constexpr bool isValue() const noexcept { return kind() == Kind::Value; }
+	constexpr bool isLiteralValue() const noexcept { return m_valueOpcode == InstOpcode::Const; }
+	constexpr bool isPhiValue() const noexcept { return m_valueOpcode == InstOpcode::Phi; }
 	constexpr bool isFunctionReturnLabel() const noexcept { return kind() == Kind::FunctionReturnLabel; }
 	constexpr bool isFunctionCallReturnLabel() const noexcept { return kind() == Kind::FunctionCallReturnLabel; }
 	constexpr bool isJunk() const noexcept { return kind() == Kind::Junk; }
@@ -99,40 +99,37 @@ public:
 
 	ControlFlowGraphs::FunctionGraphID functionReturnLabel() const { yulAssert(isFunctionReturnLabel()); return m_payload; }
 	CallSites::CallSiteID functionCallReturnLabel() const { yulAssert(isFunctionCallReturnLabel()); return m_payload; }
-	SSACFG::ValueId valueID() const
+	InstId value() const
 	{
-		yulAssert(isValueID());
-		return {InstId{m_payload}, m_valueIdOutputPos};
+		yulAssert(isValue());
+		return InstId{m_payload};
 	}
 
 	static constexpr StackSlot makeJunk() { return {0, Kind::Junk}; }
-	static StackSlot makeValueID(SSACFG const& _cfg, SSACFG::ValueId _valueID)
+	static StackSlot makeValue(SSACFG const& _cfg, InstId _value)
 	{
-		return {_valueID.instId().value, Kind::ValueID, _valueID.outputPos(), _cfg.kindOf(_valueID)};
+		return {_value.value, Kind::Value, _cfg.kindOf(_value)};
 	}
-	static StackSlot makeValueID(InstructionStore const& _store, SSACFG::ValueId _valueID)
+	static StackSlot makeValue(InstructionStore const& _store, InstId _value)
 	{
-		return {_valueID.instId().value, Kind::ValueID, _valueID.outputPos(), _store.kindOf(_valueID)};
+		return {_value.value, Kind::Value, _store.kindOf(_value)};
 	}
 	static constexpr StackSlot makeFunctionReturnLabel(ControlFlowGraphs::FunctionGraphID const _graphID) { return {_graphID, Kind::FunctionReturnLabel}; }
 	static constexpr StackSlot makeFunctionCallReturnLabel(CallSites::CallSiteID const _callSiteID) { return {_callSiteID, Kind::FunctionCallReturnLabel};	}
 
 	auto operator<=>(StackSlot const&) const = default;
 private:
-	constexpr StackSlot(std::uint32_t const _payload, Kind const _kind, ValueId::OutputSize const _valueIdOutputPos = 0, InstOpcode const _valueIdOpcode = InstOpcode::Unreachable):
+	constexpr StackSlot(std::uint32_t const _payload, Kind const _kind, InstOpcode const _valueOpcode = InstOpcode::Unreachable):
 		m_payload(_payload),
 		m_kind(_kind),
-		m_valueIdOutputPos(_valueIdOutputPos),
-		m_valueIdOpcode(_valueIdOpcode)
+		m_valueOpcode(_valueOpcode)
 	{}
 
 	/// interpretation depends on kind
 	std::uint32_t m_payload;
 	Kind m_kind;
-	/// for Kind::ValueID: output position of the referenced value within its Inst
-	ValueId::OutputSize m_valueIdOutputPos;
-	/// for Kind::ValueID: cached Opcode of the defining Inst
-	InstOpcode m_valueIdOpcode;
+	/// for Kind::Value: cached Opcode of the defining Inst
+	InstOpcode m_valueOpcode;
 };
 static_assert(sizeof(StackSlot) == 8, "Want cache efficiency, benchmark this if you go beyond 8 bytes");
 static_assert(std::is_trivially_copyable_v<StackSlot>, "Should be able to use memcpy semantics");
@@ -287,7 +284,7 @@ public:
 
 	static bool constexpr canBeFreelyGenerated(Slot const& _slot)
 	{
-		return _slot.isLiteralValueID() || _slot.isJunk() || _slot.isFunctionCallReturnLabel();
+		return _slot.isLiteralValue() || _slot.isJunk() || _slot.isFunctionCallReturnLabel();
 	}
 
 	Slot const& operator[](Offset const& _index) const noexcept { return (*m_data)[_index.value]; }

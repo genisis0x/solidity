@@ -23,6 +23,7 @@
 #include <range/v3/algorithm/count_if.hpp>
 #include <range/v3/range/conversion.hpp>
 
+#include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/reverse.hpp>
 
@@ -83,7 +84,7 @@ void LivenessAnalysis::runDagDfs()
 		// live <- PhiUses(B)
 		LivenessData live{};
 		m_cfg.forEachUpsilon(block, [&](InstId, SSACFG::Inst const& inst) {
-			SSACFG::ValueId const v = inst.inputs.at(0);
+			InstId const v = inst.inputs.at(0);
 			yulAssert(!m_cfg.isUnreachable(v));
 			if (!m_cfg.isLiteral(v))
 				live.insert(v);
@@ -97,7 +98,7 @@ void LivenessAnalysis::runDagDfs()
 					// LiveIn(S) - PhiDefs(S)
 					auto liveInWithoutPhiDefs = m_liveIns[_successor.value];
 					m_cfg.forEachPhi(m_cfg.block(_successor), [&](InstId const succInstId, SSACFG::Inst const&) {
-						liveInWithoutPhiDefs.erase(ValueId{succInstId});
+						liveInWithoutPhiDefs.erase(succInstId);
 					});
 					live.maxUnion(liveInWithoutPhiDefs);
 				}
@@ -117,21 +118,24 @@ void LivenessAnalysis::runDagDfs()
 			// add value ids to the live set that are used in exit blocks
 			live += blockExitValues(blockId);
 
-			for (InstId const instId: block.instructions | ranges::views::reverse)
+			for (auto const& [pos, instId]: block.instructions | ranges::views::enumerate | ranges::views::reverse)
 			{
 				auto const& inst = m_cfg.inst(instId);
 				if (!inst.isOperation())
 					continue;
-				// remove variables defined at p from live
-				live.eraseAll(SSACFG::outputsOf(instId, inst.numOutputs) | ranges::views::filter(excludingLiteralsFilter()));
-				// add uses at p to live
+				// Erase the op's outputs from `live`. Outputs are either the trailing
+				// Extracts (multi-output op) or the op's own InstId (single-output).
+				// Erase is a no-op for outputs that are dead.
+				for (InstId const extractId: m_cfg.extractsOf(block, pos))
+					live.erase(extractId);
+				live.erase(instId);
 				live.insertAll(inst.inputs | ranges::views::filter(excludingLiteralsFilter()));
 			}
 		}
 
 		// livein(b) <- live \cup PhiDefs(B)
 		m_cfg.forEachPhi(block, [&](InstId const instId, SSACFG::Inst const&) {
-			live.insert(ValueId{instId});
+			live.insert(instId);
 		});
 		m_liveIns[blockId.value] = live;
 	}
@@ -147,7 +151,7 @@ void LivenessAnalysis::runLoopTreeDfs(SSACFG::BlockId::ValueType const _loopHead
 		// LiveLoop <- LiveIn(B_N) - PhiDefs(B_N)
 		auto liveLoop = m_liveIns[_loopHeader];
 		m_cfg.forEachPhi(block, [&](InstId const instId, SSACFG::Inst const&) {
-			liveLoop.erase(ValueId{instId});
+			liveLoop.erase(instId);
 		});
 		// must be live out of header if live in of children
 		m_liveOuts[_loopHeader].maxUnion(liveLoop);
@@ -180,13 +184,19 @@ void LivenessAnalysis::fillOperationsLiveOut()
 			auto live = m_liveOuts[blockId.value];
 			live += blockExitValues(blockId);
 			auto rit = liveOuts.rbegin();
-			for (InstId const instId: block.instructions | ranges::views::reverse)
+			for (auto const& [pos, instId]: block.instructions | ranges::views::enumerate | ranges::views::reverse)
 			{
 				auto const& inst = m_cfg.inst(instId);
 				if (!inst.isOperation())
 					continue;
+				// liveOut for this op = live set right after the op (and any of its
+				// trailing Extracts) executes. We capture before erasing outputs so the
+				// snapshot includes the Extract / op InstIds that downstream consumers
+				// keep live.
 				*rit = live;
-				live.eraseAll(SSACFG::outputsOf(instId, inst.numOutputs) | ranges::views::filter(excludingLiteralsFilter()));
+				for (InstId const extractId: m_cfg.extractsOf(block, pos))
+					live.erase(extractId);
+				live.erase(instId);
 				live.insertAll(inst.inputs | ranges::views::filter(excludingLiteralsFilter()));
 				++rit;
 			}

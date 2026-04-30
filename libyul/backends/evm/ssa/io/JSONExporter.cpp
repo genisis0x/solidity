@@ -36,10 +36,10 @@ using namespace solidity::yul::ssa::io::json;
 
 namespace
 {
-Json toJson(SSACFG const& _cfg, ranges::input_range auto&& _values) requires std::convertible_to<ranges::range_reference_t<decltype(_values)>, SSACFG::ValueId>
+Json toJson(SSACFG const& _cfg, ranges::input_range auto&& _values) requires std::convertible_to<ranges::range_reference_t<decltype(_values)>, InstId>
 {
 	Json ret = Json::array();
-	for (SSACFG::ValueId const value: _values)
+	for (InstId const value: _values)
 		ret.push_back(value.str(_cfg));
 	return ret;
 }
@@ -70,7 +70,7 @@ Json toJson(Json& _ret, SSACFG const& _cfg, InstId const _instId, ControlFlowGra
 	}
 
 	opJson["in"] = toJson(_cfg, inst.inputs);
-	opJson["out"] = toJson(_cfg, SSACFG::outputsOf(_instId, inst.numOutputs));
+	opJson["out"] = toJson(_cfg, _cfg.opOutputs(_cfg.block(inst.block), _instId));
 
 	return opJson;
 }
@@ -103,16 +103,15 @@ Json toJson(SSACFG const& _cfg, SSACFG::BlockId _blockId, LivenessAnalysis const
 			| ranges::views::transform([](auto const& entry) { return "Block" + std::to_string(entry.value); })
 			| ranges::to<Json::array_t>();
 	_cfg.forEachPhi(block, [&](InstId const instId, SSACFG::Inst const&) {
-		SSACFG::ValueId const phi{instId, 0};
 		// Reconstruct phi arguments from upsilon Insts in predecessor blocks.
-		std::vector<SSACFG::ValueId> phiArgs;
+		std::vector<InstId> phiArgs;
 		for (auto const& entryId: block.entries)
 			for (InstId const predInstId: _cfg.block(entryId).instructions)
 			{
 				auto const& predInst = _cfg.inst(predInstId);
 				if (!predInst.isUpsilon())
 					continue;
-				if (_cfg.upsilonPhi(predInstId) == phi)
+				if (_cfg.upsilonPhi(predInstId) == instId)
 				{
 					phiArgs.push_back(predInst.inputs.at(0));
 					break;
@@ -121,7 +120,7 @@ Json toJson(SSACFG const& _cfg, SSACFG::BlockId _blockId, LivenessAnalysis const
 		Json phiJson = Json::object();
 		phiJson["op"] = "PhiFunction";
 		phiJson["in"] = toJson(_cfg, phiArgs);
-		phiJson["out"] = toJson(_cfg, std::vector{phi});
+		phiJson["out"] = toJson(_cfg, std::vector{instId});
 		blockJson["instructions"].push_back(phiJson);
 	});
 	_cfg.forEachOperation(block, [&](InstId const instId, SSACFG::Inst const&) {
@@ -176,7 +175,7 @@ Json exportFunction(SSACFG const& _cfg, LivenessAnalysis const* _liveness, Contr
 	Json functionJson = Json::object();
 	functionJson["type"] = "Function";
 	functionJson["entry"] = "Block" + std::to_string(_cfg.entry.value);
-	static auto constexpr argsTransform = [](auto const& _arg) { return fmt::format("v{}", _arg.instId().value); };
+	static auto constexpr argsTransform = [](InstId const& _arg) { return fmt::format("v{}", _arg.value); };
 	functionJson["arguments"] = _cfg.arguments | ranges::views::transform(argsTransform) | ranges::to<std::vector>;
 	functionJson["numReturns"] = _cfg.numReturns;
 	functionJson["blocks"] = exportBlock(_cfg, _cfg.entry, _liveness, _controlFlow);

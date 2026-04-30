@@ -44,8 +44,8 @@ void handlePhiFunctions(StackData& _stackData, PhiInverse const& _phiInverse, Li
 	for (auto const& [phi, preImage]: _phiInverse.data())
 	{
 		auto reversedStackData = _stackData | ranges::views::reverse;
-		auto const phiSlot = StackSlot::makeValueID(_cfg, phi);
-		auto const preImageSlot = StackSlot::makeValueID(_cfg, preImage);
+		auto const phiSlot = StackSlot::makeValue(_cfg, phi);
+		auto const preImageSlot = StackSlot::makeValue(_cfg, preImage);
 		auto it = ranges::find(reversedStackData, preImageSlot);
 		if (_liveness.contains(preImage))
 		{
@@ -75,7 +75,7 @@ void declareJunk(StackType& _stack, LivenessAnalysis::LivenessData const& _live)
 	for (StackOffset offset{0}; offset < _stack.size(); ++offset.value)
 	{
 		auto const& slot = _stack[offset];
-		if (slot.isValueID() && !_live.contains(slot.valueID()))
+		if (slot.isValue() && !_live.contains(slot.value()))
 			_stack.declareJunk(offset);
 	}
 }
@@ -152,8 +152,8 @@ void StackLayoutGenerator::defineStackIn(SSACFG::BlockId const& _blockId)
 			blockLayout.stackIn.reserve(m_cfg.arguments.size() + (m_hasFunctionReturnLabel ? 1u : 0u));
 			if (m_hasFunctionReturnLabel)
 				blockLayout.stackIn.push_back(Slot::makeFunctionReturnLabel(m_graphID));
-			for (auto const& valueID: m_cfg.arguments | ranges::views::reverse)
-				blockLayout.stackIn.push_back(Slot::makeValueID(m_cfg, valueID));
+			for (auto const& arg: m_cfg.arguments | ranges::views::reverse)
+				blockLayout.stackIn.push_back(Slot::makeValue(m_cfg, arg));
 		}
 		m_resultLayout[_blockId] = blockLayout;
 		return;
@@ -231,9 +231,15 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 	auto const& operationsLiveOut = m_liveness.operationsLiveOut(_blockId);
 	blockLayout.operationIn.reserve(operationsLiveOut.size());
 	std::size_t operationIndex = 0;
-	m_cfg.forEachOperation(block, [&](InstId const instId, SSACFG::Inst const& inst) {
+	for (std::size_t pos = 0; pos < block.instructions.size(); ++pos)
+	{
+		InstId const instId = block.instructions[pos];
+		auto const& inst = m_cfg.inst(instId);
+		if (!inst.isOperation())
+			continue;
+		auto const outputs = m_cfg.opOutputs(block, pos);
 		auto opLiveOutWithoutOutputs = operationsLiveOut[operationIndex];
-		opLiveOutWithoutOutputs.eraseAll(SSACFG::outputsOf(instId, inst.numOutputs));
+		opLiveOutWithoutOutputs.eraseAll(outputs);
 
 		std::vector<Slot> requiredStackTop;
 		if (inst.opcode == InstOpcode::Call)
@@ -246,12 +252,12 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 				requiredStackTop.emplace_back(Slot::makeFunctionCallReturnLabel(*callSiteID));
 			}
 		}
-		requiredStackTop += inst.inputs | ranges::views::transform([this](ValueId const& _id) { return StackSlot::makeValueID(m_cfg, _id); });
+		requiredStackTop += inst.inputs | ranges::views::transform([this](InstId const& _id) { return StackSlot::makeValue(m_cfg, _id); });
 
 		for (StackType::Depth depth{0}; depth < stack.size(); ++depth.value)
 			if (
-				stack.slot(depth).isValueID() &&
-				!opLiveOutWithoutOutputs.contains(stack.slot(depth).valueID()) &&
+				stack.slot(depth).isValue() &&
+				!opLiveOutWithoutOutputs.contains(stack.slot(depth).value()) &&
 				ranges::find(requiredStackTop, stack.slot(depth)) == ranges::end(requiredStackTop)
 			)
 				stack.declareJunk(depth);
@@ -277,10 +283,10 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 		blockLayout.operationIn.push_back(currentStackData);
 		for (std::size_t i = 0; i < requiredStackTop.size(); ++i)
 			stack.pop<false>();
-		for (auto const& val: SSACFG::outputsOf(instId, inst.numOutputs))
-			stack.push<false>(Slot::makeValueID(m_cfg, val));
+		for (InstId const id: outputs)
+			stack.push<false>(Slot::makeValue(m_cfg, id));
 		++operationIndex;
-	});
+	}
 	yulAssert(operationIndex == operationsLiveOut.size());
 
 	std::visit(
@@ -292,10 +298,10 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 				bool const conditionSlotAlreadyFinal =
 					!blockLiveOut.contains(_cJump.condition) &&  // if our live out does not contain the condition (ie we dont have to dup it)
 					!stack.empty() &&   // our stack is not empty
-					stack.top().isValueID() && stack.top().valueID() == _cJump.condition;  // and the condition is already on top
+					stack.top().isValue() && stack.top().value() == _cJump.condition;  // and the condition is already on top
 				if (!conditionSlotAlreadyFinal)
 				{
-					auto const condition = Slot::makeValueID(m_cfg, _cJump.condition);
+					auto const condition = Slot::makeValue(m_cfg, _cJump.condition);
 					StackSlotLiveness const blockLiveOutSlots = toStackSlotLiveness(m_cfg, blockLiveOut);
 					auto const targetSize = findOptimalTargetSize(
 						stack.data(),
@@ -310,7 +316,7 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 					yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);
 				}
 
-				yulAssert(!stack.empty() && stack.top().isValueID() && stack.top().valueID() == _cJump.condition);
+				yulAssert(!stack.empty() && stack.top().isValue() && stack.top().value() == _cJump.condition);
 				yulAssert(ranges::none_of(m_cfg.block(_cJump.nonZero).instructions, [this](InstId const _id) {
 					return m_cfg.isPhi(_id);
 				}));
@@ -329,7 +335,7 @@ void StackLayoutGenerator::visitBlock(SSACFG::BlockId const& _blockId)
 			[&](SSACFG::BasicBlock::FunctionReturn const& _functionReturn) {
 				yulAssert(m_hasFunctionReturnLabel, "When there is a proper function return, we need to have a label for it");
 				// in case there are return values, let's bring the function return label to the top
-				StackData returnStack = _functionReturn.returnValues | ranges::views::transform([this](ValueId const _id) { return StackSlot::makeValueID(m_cfg, _id); }) | ranges::to<std::vector>;
+				StackData returnStack = _functionReturn.returnValues | ranges::views::transform([this](InstId const _id) { return StackSlot::makeValue(m_cfg, _id); }) | ranges::to<std::vector>;
 				returnStack.push_back(StackSlot::makeFunctionReturnLabel(m_graphID));
 				auto const shuffleResult = StackShuffler<StackType::Callbacks>::shuffle(stack, returnStack);
 				yulAssert(shuffleResult.status == StackShufflerResult::Status::Admissible);

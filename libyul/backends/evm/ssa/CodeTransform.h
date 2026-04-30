@@ -49,11 +49,11 @@ struct AssemblyCallbacks
 	{
 		switch (_slot.kind())
 		{
-		case StackSlot::Kind::ValueID:
+		case StackSlot::Kind::Value:
 		{
-			auto const id = _slot.valueID();
+			auto const id = _slot.value();
 			yulAssert(cfg->isLiteral(id), fmt::format("Tried bringing up non-const {}", id));
-			assembly->appendConstant(cfg->literalPayload(id.instId()));
+			assembly->appendConstant(cfg->literalPayload(id));
 			return;
 		}
 		case StackSlot::Kind::Junk:

@@ -64,7 +64,6 @@ public:
 	~SSACFG() = default;
 
 	using BlockId = ssa::BlockId;
-	using ValueId = ssa::ValueId;
 
 	using BuiltinCall = InstructionStore::BuiltinCall;
 	using Call = InstructionStore::Call;
@@ -75,7 +74,7 @@ public:
 		struct MainExit {};
 		struct ConditionalJump
 		{
-			ValueId condition;
+			InstId condition;
 			BlockId nonZero;
 			BlockId zero;
 		};
@@ -85,7 +84,7 @@ public:
 		};
 		struct FunctionReturn
 		{
-			std::vector<ValueId> returnValues;
+			std::vector<InstId> returnValues;
 		};
 		struct Terminated {};
 		std::vector<BlockId> entries;
@@ -132,34 +131,19 @@ public:
 	size_t numInsts() const { return m_instructions.numInsts(); }
 	std::vector<Inst> const& instructions() const { return m_instructions.instructions(); }
 
-	static auto outputsOf(InstId const _id, ValueId::OutputSize const _numOutputs)
-	{
-		return InstructionStore::outputsOf(_id, _numOutputs);
-	}
-
-	auto instOutputs(InstId const _id) const
-	{
-		return m_instructions.instOutputs(_id);
-	}
-
-	/// Returns the opcode category for a given ValueId.
-	InstOpcode kindOf(ValueId const _v) const { return m_instructions.kindOf(_v); }
+	/// Returns the opcode category for a given InstId.
+	InstOpcode kindOf(InstId const _id) const { return m_instructions.kindOf(_id); }
 
 	bool isPhi(InstId const _id) const { return inst(_id).isPhi(); }
-	bool isPhi(ValueId const _v) const { return isPhi(_v.instId()); }
 	bool isUpsilon(InstId const _id) const { return inst(_id).isUpsilon(); }
-	bool isUpsilon(ValueId const _v) const { return isUpsilon(_v.instId()); }
 	bool isLiteral(InstId const _id) const { return inst(_id).isLiteral(); }
-	bool isLiteral(ValueId const _v) const { return isLiteral(_v.instId()); }
 	bool isUnreachable(InstId const _id) const { return inst(_id).isUnreachable(); }
-	bool isUnreachable(ValueId const _v) const { return isUnreachable(_v.instId()); }
 	bool isFunctionArg(InstId const _id) const { return inst(_id).isFunctionArg(); }
-	bool isFunctionArg(ValueId const _v) const { return isFunctionArg(_v.instId()); }
+	bool isExtract(InstId const _id) const { return inst(_id).isExtract(); }
 	bool isOperation(InstId const _id) const { return inst(_id).isOperation(); }
-	bool isOperation(ValueId const _v) const { return isOperation(_v.instId()); }
 
 	/// Returns the phi targeted by an Upsilon Inst.
-	ValueId upsilonPhi(InstId const _id) const { return m_instructions.upsilonPhi(_id); }
+	InstId upsilonPhi(InstId const _id) const { return m_instructions.upsilonPhi(_id); }
 
 	/// Returns the u256 payload of a Const Inst.
 	u256 const& literalPayload(InstId const _id) const { return m_instructions.literalPayload(_id); }
@@ -168,60 +152,55 @@ public:
 
 	Call const& callPayload(InstId const _id) const { return m_instructions.callPayload(_id); }
 
-	/// Creates a Phi Inst in the given block and returns its output ValueId.
-	ValueId newPhi(BlockId const _definingBlock)
+	/// Returns the projection index of an Extract Inst.
+	OutputSize extractIndex(InstId const _id) const { return m_instructions.extractIndex(_id); }
+
+	/// Creates a Phi Inst in the given block and returns its InstId.
+	InstId newPhi(BlockId const _definingBlock)
 	{
 		InstId const id = scheduleInBlock(m_instructions.appendPhi(_definingBlock), _definingBlock);
-		ValueId const v{id};
 		if (debugInfo)
-			debugInfo->setValueDebugData(v, debugInfo->blockDebugData(_definingBlock));
-		return v;
+			debugInfo->setValueDebugData(id, debugInfo->blockDebugData(_definingBlock));
+		return id;
 	}
 
-	ValueId newFunctionArgument()
+	InstId newFunctionArgument()
 	{
 		InstId const id = scheduleInBlock(m_instructions.appendFunctionArg(entry), entry);
-		ValueId const v{id};
 		if (debugInfo)
-			debugInfo->setValueDebugData(v, debugInfo->blockDebugData(entry));
-		return v;
+			debugInfo->setValueDebugData(id, debugInfo->blockDebugData(entry));
+		return id;
 	}
 
-	ValueId unreachableValue()
+	InstId unreachableValue()
 	{
-		return ValueId{m_instructions.appendUnreachable()};
+		return m_instructions.appendUnreachable();
 	}
 
-	/// Literal ValueIds are deduplicated. Const Insts are pinned to the entry block.
-	ValueId newLiteral(langutil::DebugData::ConstPtr _debugData, u256 _value)
+	/// Literal InstIds are deduplicated. Const Insts are pinned to the entry block.
+	InstId newLiteral(langutil::DebugData::ConstPtr _debugData, u256 _value)
 	{
 		auto const beforeCount = m_instructions.numInsts();
 		InstId const id = m_instructions.appendLiteral(entry, std::move(_value));
-		ValueId const v{id};
 		// Newly allocated (not deduplicated): schedule in entry and attach debug data.
 		if (m_instructions.numInsts() > beforeCount)
 		{
 			scheduleInBlock(id, entry);
 			if (debugInfo)
-				debugInfo->setValueDebugData(v, std::move(_debugData));
+				debugInfo->setValueDebugData(id, std::move(_debugData));
 		}
-		return v;
+		return id;
 	}
 
 	InstId makeBuiltinCall(
 		BlockId const _block,
 		BuiltinCall _payload,
-		std::vector<ValueId> _inputs,
-		std::size_t const _numOutputs,
+		std::vector<InstId> _inputs,
 		langutil::DebugData::ConstPtr _debugData = {}
 	)
 	{
-		yulAssert(
-			_numOutputs <= ValueId::maxOutputs,
-			fmt::format("SSA CFG: BuiltinCall with {} outputs exceeds the maximum of {}.", _numOutputs, ValueId::maxOutputs)
-		);
 		InstId const id = scheduleInBlock(
-			m_instructions.appendBuiltinCall(_block, std::move(_payload), std::move(_inputs), _numOutputs),
+			m_instructions.appendBuiltinCall(_block, std::move(_payload), std::move(_inputs)),
 			_block
 		);
 		if (debugInfo && _debugData)
@@ -232,17 +211,12 @@ public:
 	InstId makeCall(
 		BlockId const _block,
 		Call _payload,
-		std::vector<ValueId> _inputs,
-		std::size_t const _numOutputs,
+		std::vector<InstId> _inputs,
 		langutil::DebugData::ConstPtr _debugData = {}
 	)
 	{
-		yulAssert(
-			_numOutputs <= ValueId::maxOutputs,
-			fmt::format("SSA CFG: Call with {} outputs exceeds the maximum of {}.", _numOutputs, ValueId::maxOutputs)
-		);
 		InstId const id = scheduleInBlock(
-			m_instructions.appendCall(_block, std::move(_payload), std::move(_inputs), _numOutputs),
+			m_instructions.appendCall(_block, std::move(_payload), std::move(_inputs)),
 			_block
 		);
 		if (debugInfo && _debugData)
@@ -250,7 +224,25 @@ public:
 		return id;
 	}
 
-	InstId emitUpsilon(BlockId const _block, ValueId _value, ValueId const _phi)
+	/// Creates an Extract projecting output `_index` of `_producer` and schedules it in `_block`.
+	InstId makeExtract(
+		BlockId const _block,
+		InstId const _producer,
+		OutputSize const _index,
+		langutil::DebugData::ConstPtr _debugData = {}
+	)
+	{
+		yulAssert(_index < maxOutputs);
+		InstId const id = scheduleInBlock(
+			m_instructions.appendExtract(_block, _producer, _index),
+			_block
+		);
+		if (debugInfo && _debugData)
+			debugInfo->setValueDebugData(id, std::move(_debugData));
+		return id;
+	}
+
+	InstId emitUpsilon(BlockId const _block, InstId const _value, InstId const _phi)
 	{
 		return scheduleInBlock(m_instructions.appendUpsilon(_block, _value, _phi), _block);
 	}
@@ -278,7 +270,7 @@ public:
 	std::set<BlockId> exits;
 	std::string name{};
 	bool canContinue = true;
-	std::vector<ValueId> arguments;
+	std::vector<InstId> arguments;
 	std::size_t numReturns = 0;
 
 	bool isMainGraph() const { return name.empty(); }
@@ -318,6 +310,77 @@ public:
 	void forEachOperation(BasicBlock const& _block, Callable&& _fn) const
 	{
 		forEachInstWhere(*this, _block, &Inst::isOperation, std::forward<Callable>(_fn));
+	}
+
+	/// Returns the contiguous range of Extract InstIds that immediately follow the
+	/// operation at index `_opPos` in `_block.instructions`. Returns an empty vector when
+	/// the operation has no Extracts (single- or zero-output cases).
+	std::vector<InstId> extractsOf(BasicBlock const& _block, std::size_t _opPos) const
+	{
+		std::vector<InstId> result;
+		for (std::size_t i = _opPos + 1; i < _block.instructions.size(); ++i)
+		{
+			InstId const id = _block.instructions[i];
+			if (!inst(id).isExtract())
+				break;
+			yulAssert(inst(id).inputs.size() == 1);
+			if (inst(id).inputs.at(0) != _block.instructions[_opPos])
+				break;
+			result.push_back(id);
+		}
+		return result;
+	}
+
+	/// Convenience overload: locates `_op` inside `_block.instructions` and returns its
+	/// trailing Extracts. Asserts that the operation is in the block.
+	std::vector<InstId> extractsOf(BasicBlock const& _block, InstId const _op) const
+	{
+		auto const it = std::find(_block.instructions.begin(), _block.instructions.end(), _op);
+		yulAssert(it != _block.instructions.end());
+		return extractsOf(_block, static_cast<std::size_t>(it - _block.instructions.begin()));
+	}
+
+	/// Returns the number of return values an op produces. 0 for void ops; 1 if its
+	/// own InstId is the value handle; N>1 for multi-output (in which case the op has
+	/// N trailing Extracts). Looked up via the dialect (BuiltinCall) or call payload (Call).
+	std::size_t numReturnsOf(InstId _op) const
+	{
+		auto const& i = inst(_op);
+		switch (i.opcode)
+		{
+		case InstOpcode::Call:
+			return callPayload(_op).numReturns;
+		case InstOpcode::BuiltinCall:
+			return evmDialect.builtin(builtinPayload(_op).builtin).numReturns;
+		default:
+			yulAssert(false, "numReturnsOf: not an operation");
+		}
+	}
+
+	/// Logical value-handles produced by an operation, in stack order (bottom to top of
+	/// the slots it pushes). Empty for 0-output ops; {op} for single-output; trailing
+	/// Extracts for multi-output. Asserts that the op's structural position matches its
+	/// numReturns.
+	std::vector<InstId> opOutputs(BasicBlock const& _block, std::size_t _opPos) const
+	{
+		InstId const op = _block.instructions[_opPos];
+		std::size_t const n = numReturnsOf(op);
+		if (n == 0)
+			return {};
+		if (n == 1)
+			return {op};
+		auto extracts = extractsOf(_block, _opPos);
+		yulAssert(extracts.size() == n, "Multi-output op missing trailing Extracts");
+		return extracts;
+	}
+
+	/// InstId overload: locates `_op` inside `_block.instructions` and returns its
+	/// logical outputs.
+	std::vector<InstId> opOutputs(BasicBlock const& _block, InstId const _op) const
+	{
+		auto const it = std::find(_block.instructions.begin(), _block.instructions.end(), _op);
+		yulAssert(it != _block.instructions.end());
+		return opOutputs(_block, static_cast<std::size_t>(it - _block.instructions.begin()));
 	}
 
 private:

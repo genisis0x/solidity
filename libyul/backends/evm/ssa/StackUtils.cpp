@@ -44,9 +44,9 @@ void GasAccumulatingCallbacks::dup(StackDepth _depth)
 
 void GasAccumulatingCallbacks::push(StackSlot const& _slot)
 {
-	if (_slot.isLiteralValueID())
+	if (_slot.isLiteralValue())
 	{
-		auto const size = numberEncodingSize(cfg.literalPayload(_slot.valueID().instId()));
+		auto const size = numberEncodingSize(cfg.literalPayload(_slot.value()));
 		opGas += evmasm::GasMeter::runGas(evmasm::pushInstruction(size), cfg.evmDialect.evmVersion());
 	}
 	else if (_slot.isJunk())
@@ -72,10 +72,10 @@ StackData solidity::yul::ssa::stackPreImage(SSACFG const& _cfg, StackData _stack
 {
 	if (!_phiInverse.noOp())
 		for (auto& slot: _stack)
-			if (slot.isValueID())
+			if (slot.isValue())
 			{
-				auto const preImage = _phiInverse(slot.valueID());
-				slot = StackSlot::makeValueID(_cfg, preImage);
+				auto const preImage = _phiInverse(slot.value());
+				slot = StackSlot::makeValue(_cfg, preImage);
 			}
 	return _stack;
 }
@@ -124,9 +124,9 @@ std::size_t solidity::yul::ssa::findOptimalTargetSize
 				break;
 			case StackShufflerResult::Status::StackTooDeep:
 			{
-				yulAssert(result.culprit.isValueID() && !result.culprit.isLiteralValueID());
-				yulAssert(!spillSet.isSpilled(result.culprit.valueID()));
-				spillSet.spill(result.culprit.valueID());
+				yulAssert(result.culprit.isValue() && !result.culprit.isLiteralValue());
+				yulAssert(!spillSet.isSpilled(result.culprit.value()));
+				spillSet.spill(result.culprit.value());
 				break;
 			}
 			case StackShufflerResult::Status::MaxIterationsReached:

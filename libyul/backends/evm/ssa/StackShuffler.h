@@ -40,7 +40,7 @@ namespace detail
 
 inline bool slotIsSpilled(StackSlot const& _slot, SpilledVariables const* const _spilledVariables)
 {
-	return _spilledVariables && _slot.isValueID() && _spilledVariables->isSpilled(_slot.valueID());
+	return _spilledVariables && _slot.isValue() && _spilledVariables->isSpilled(_slot.value());
 }
 
 inline bool slotCanBeLoadedOrPushed(StackSlot const& _slot, SpilledVariables const* const _spilledVariables)
@@ -314,8 +314,8 @@ private:
 		{
 			Slot const& candidate = _stack[offset];
 			if (
-				candidate.isValueID() &&
-				!candidate.isLiteralValueID() &&
+				candidate.isValue() &&
+				!candidate.isLiteralValue() &&
 				!_state.slotIsSpilled(candidate)
 			)
 				return {StackShufflerResult::Status::StackTooDeep, candidate};
@@ -346,7 +346,7 @@ private:
 			int currentCount = static_cast<int>(_state.count(slot));
 
 			int liveOutCount = 0;
-			if (slot.isValueID() && _state.target().liveOut.contains(slot))
+			if (slot.isValue() && _state.target().liveOut.contains(slot))
 				liveOutCount = static_cast<int>(_state.target().liveOut.count(slot));
 			int deficit = liveOutCount - currentCount;
 
@@ -735,7 +735,7 @@ private:
 					if (
 						_stack.isValidSwapTarget(tailOffset) &&
 						_state.slotCanBeLoadedOrPushed(_stack[tailOffset]) &&
-						!_stack[tailOffset].isLiteralValueID()
+						!_stack[tailOffset].isLiteralValue()
 					)
 					{
 						// bring up offset slot if necessary
@@ -749,7 +749,7 @@ private:
 				for (StackOffset tailOffset: _state.stackTailRange())
 					if (
 						_stack.isValidSwapTarget(tailOffset) &&
-						_stack[tailOffset].isLiteralValueID()
+						_stack[tailOffset].isLiteralValue()
 					)
 					{
 						// bring up offset slot if necessary
@@ -857,7 +857,7 @@ private:
 				bool const hasSurplus = _state.count(slot) > _state.targetMinCount(slot);
 				bool const hasReachableDuplicate = _state.countReachable(slot) > 1;
 				bool const canBeFreelyGenerated = _stack.canBeFreelyGenerated(slot);
-				bool const isLit = slot.isLiteralValueID();
+				bool const isLit = slot.isLiteralValue();
 
 				if (isJunk && notInPosition)
 					return 5;

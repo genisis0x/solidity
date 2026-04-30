@@ -20,17 +20,17 @@
 // \l\
 // [FunctionCallReturnLabel[0], lit0]\l\
 // pair\l\
-// [FunctionCallReturnLabel[0], v1, v1.1]\l\
+// [FunctionCallReturnLabel[0], v2, v3]\l\
 // \l\
-// [v1, v1.1, FunctionCallReturnLabel[1], v1]\l\
+// [v2, v3, FunctionCallReturnLabel[1], v2]\l\
 // pair\l\
-// [v1, v1.1, FunctionCallReturnLabel[1], v2, v2.1]\l\
+// [v2, v3, FunctionCallReturnLabel[1], v5, v6]\l\
 // \l\
-// [JUNK, v1.1, v2.1, v2]\l\
+// [JUNK, v3, v6, v5]\l\
 // add\l\
-// [JUNK, v1.1, v3]\l\
+// [JUNK, v3, v7]\l\
 // \l\
-// [JUNK, v3, v1.1]\l\
+// [JUNK, v7, v3]\l\
 // sstore\l\
 // [JUNK]\l\
 // \l\

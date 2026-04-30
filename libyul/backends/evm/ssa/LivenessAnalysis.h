@@ -36,7 +36,7 @@ class LivenessAnalysis
 public:
 	/// Per-program-point liveness, each value's use count is the max number of times the value will be read along
 	/// all paths downstream of that point
-	using LivenessData = util::UseCountSet<SSACFG::ValueId>;
+	using LivenessData = util::UseCountSet<InstId>;
 
 	explicit LivenessAnalysis(SSACFG const& _cfg);
 
@@ -55,7 +55,7 @@ private:
 
 	auto excludingLiteralsFilter() const
 	{
-		return [this](SSACFG::ValueId _v) { return !m_cfg.isLiteral(_v); };
+		return [this](InstId _v) { return !m_cfg.isLiteral(_v); };
 	}
 
 	SSACFG const& m_cfg;

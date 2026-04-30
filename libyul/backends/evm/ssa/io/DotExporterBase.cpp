@@ -117,7 +117,7 @@ void DotExporterBase::writeBlock(std::ostream& _out, SSACFG::BlockId const _id)
 		},
 		[&](SSACFG::BasicBlock::FunctionReturn const& fr)
 		{
-			auto const valueToString = [&](SSACFG::ValueId const& valueId) { return valueId.str(m_cfg); };
+			auto const valueToString = [&](InstId const& valueId) { return valueId.str(m_cfg); };
 			_out << fmt::format("{}Exit [label=\"FunctionReturn[{}]\"];\n",
 				formatBlockHandle(_id),
 				fmt::join(fr.returnValues | ranges::views::transform(valueToString), ", ")
@@ -177,7 +177,7 @@ std::string DotExporterBase::exportFunction(SSACFG const& _function, bool _wrapI
 	if (_wrapInDigraph)
 		out << fmt::format("digraph SSACFG {{\nnodesep=0.7;\ngraph[fontname=\"DejaVu Sans\", rankdir={}]\nnode[shape=box,fontname=\"DejaVu Sans\"];\n\n", m_rankDir);
 
-	static auto constexpr argsTransform = [](auto const& arg) { return fmt::format("v{}", arg.instId().value); };
+	static auto constexpr argsTransform = [](InstId const& arg) { return fmt::format("v{}", arg.value); };
 	auto const entryHandle = fmt::format("FunctionEntry_{}_{}", escapeId(_function.name), _function.entry.value);
 	if (_function.numReturns > 0)
 		out << fmt::format("{} [label=\"function {}:\n [{} returns] := {}({})\"];\n",

@@ -31,9 +31,6 @@
 
 #include <libsolutil/Numeric.h>
 
-#include <range/v3/view/iota.hpp>
-#include <range/v3/view/transform.hpp>
-
 #include <cstdint>
 #include <limits>
 #include <map>
@@ -58,20 +55,25 @@ public:
 	{
 		FunctionGraphID graphID;
 		bool canContinue;
+		/// Cached return count of the callee. The Call inst itself produces no logical
+		/// output; its return slots are named by the trailing Extract insts (multi-output)
+		/// or by the Call's own InstId (single-output). Used by codegen to know how many
+		/// stack slots the call leaves behind.
+		std::size_t numReturns;
 	};
 	struct Inst
 	{
 		InstOpcode opcode;
-		ValueId::OutputSize numOutputs;
 		std::uint32_t payloadIndex = NoPayload;
 		BlockId block{};
-		std::vector<ValueId> inputs{};
+		std::vector<InstId> inputs{};
 
 		constexpr bool isPhi() const noexcept { return opcode == InstOpcode::Phi; }
 		constexpr bool isUpsilon() const noexcept { return opcode == InstOpcode::Upsilon; }
 		constexpr bool isLiteral() const noexcept { return opcode == InstOpcode::Const; }
 		constexpr bool isUnreachable() const noexcept { return opcode == InstOpcode::Unreachable; }
 		constexpr bool isFunctionArg() const noexcept { return opcode == InstOpcode::FunctionArg; }
+		constexpr bool isExtract() const noexcept { return opcode == InstOpcode::Extract; }
 		/// Operation = a Call or BuiltinCall.
 		constexpr bool isOperation() const noexcept
 		{
@@ -91,23 +93,11 @@ public:
 	std::size_t numInsts() const { return m_insts.size(); }
 	std::vector<Inst> const& instructions() const { return m_insts; }
 
-	static auto outputsOf(InstId const _id, ValueId::OutputSize const _numOutputs)
-	{
-		return
-			ranges::views::iota(ValueId::OutputSize{0}, _numOutputs) |
-			ranges::views::transform([_id](ValueId::OutputSize const _pos) { return ValueId{_id, _pos}; });
-	}
-
-	auto instOutputs(InstId const _id) const
-	{
-		return outputsOf(_id, inst(_id).numOutputs);
-	}
-
-	/// Returns the opcode category for a given ValueId.
-	InstOpcode kindOf(ValueId const _v) const { return inst(_v.instId()).opcode; }
+	/// Returns the opcode category for a given InstId.
+	InstOpcode kindOf(InstId const _id) const { return inst(_id).opcode; }
 
 	/// Returns the phi targeted by an Upsilon Inst.
-	ValueId upsilonPhi(InstId const _id) const { return payloadAs<InstOpcode::Upsilon>(_id, m_upsilonPhis); }
+	InstId upsilonPhi(InstId const _id) const { return payloadAs<InstOpcode::Upsilon>(_id, m_upsilonPhis); }
 
 	/// Returns the u256 payload of a Const Inst.
 	u256 const& literalPayload(InstId const _id) const { return payloadAs<InstOpcode::Const>(_id, m_literalPayloads); }
@@ -116,22 +106,25 @@ public:
 
 	Call const& callPayload(InstId const _id) const { return payloadAs<InstOpcode::Call>(_id, m_callPayloads); }
 
+	/// Returns the projection index of an Extract Inst.
+	OutputSize extractIndex(InstId const _id) const { return payloadAs<InstOpcode::Extract>(_id, m_extractIndices); }
+
 	/// Allocates a new Phi Inst defined in `_definingBlock`. Returns the new InstId.
 	InstId appendPhi(BlockId const _definingBlock)
 	{
-		return appendInst(Inst{InstOpcode::Phi, 1, NoPayload, _definingBlock, {}});
+		return appendInst(Inst{InstOpcode::Phi, NoPayload, _definingBlock, {}});
 	}
 
 	/// Allocates a new FunctionArg Inst defined in `_entryBlock`. Returns the new InstId.
 	InstId appendFunctionArg(BlockId const _entryBlock)
 	{
-		return appendInst(Inst{InstOpcode::FunctionArg, 1, NoPayload, _entryBlock, {}});
+		return appendInst(Inst{InstOpcode::FunctionArg, NoPayload, _entryBlock, {}});
 	}
 
 	/// Allocates a new Unreachable Inst. Not pinned to any block (see class comment).
 	InstId appendUnreachable()
 	{
-		return appendInst(Inst{InstOpcode::Unreachable, 1, NoPayload, BlockId{}, {}});
+		return appendInst(Inst{InstOpcode::Unreachable, NoPayload, BlockId{}, {}});
 	}
 
 	/// Allocates a new Const Inst with payload `_value`, pinned to `_entryBlock`.
@@ -142,7 +135,7 @@ public:
 		if (auto const it = m_literalDedup.find(_value); it != m_literalDedup.end())
 			return it->second;
 		auto const payloadIdx = allocPayload(m_literalPayloads, _value);
-		InstId const id = appendInst(Inst{InstOpcode::Const, 1, payloadIdx, _entryBlock, {}});
+		InstId const id = appendInst(Inst{InstOpcode::Const, payloadIdx, _entryBlock, {}});
 		m_literalDedup.emplace(std::move(_value), id);
 		return id;
 	}
@@ -151,15 +144,12 @@ public:
 	InstId appendBuiltinCall(
 		BlockId const _block,
 		BuiltinCall _payload,
-		std::vector<ValueId> _inputs,
-		std::size_t const _numOutputs
+		std::vector<InstId> _inputs
 	)
 	{
 		yulAssert(_block.hasValue());
-		yulAssert(_numOutputs <= std::numeric_limits<ValueId::OutputSize>::max());
 		return appendInst(Inst{
 			InstOpcode::BuiltinCall,
-			static_cast<ValueId::OutputSize>(_numOutputs),
 			allocPayload(m_builtinPayloads, std::move(_payload)),
 			_block,
 			std::move(_inputs)
@@ -170,26 +160,36 @@ public:
 	InstId appendCall(
 		BlockId const _block,
 		Call _payload,
-		std::vector<ValueId> _inputs,
-		std::size_t const _numOutputs
+		std::vector<InstId> _inputs
 	)
 	{
 		yulAssert(_block.hasValue());
-		yulAssert(_numOutputs <= std::numeric_limits<ValueId::OutputSize>::max());
 		return appendInst(Inst{
 			InstOpcode::Call,
-			static_cast<ValueId::OutputSize>(_numOutputs),
 			allocPayload(m_callPayloads, std::move(_payload)),
 			_block,
 			std::move(_inputs)
 		});
 	}
 
-	/// Allocates a new Upsilon Inst targeting `_phi`, feeding `_value` from `_block`.
-	InstId appendUpsilon(BlockId const _block, ValueId const _value, ValueId const _phi)
+	/// Allocates a new Extract Inst projecting output `_index` of `_producer`. Returns the new InstId.
+	InstId appendExtract(BlockId const _block, InstId const _producer, OutputSize const _index)
 	{
-		yulAssert(inst(_phi.instId()).isPhi());
-		return appendInst(Inst{InstOpcode::Upsilon, 0, allocPayload(m_upsilonPhis, _phi), _block, {_value}});
+		yulAssert(_block.hasValue());
+		yulAssert(_producer.hasValue());
+		return appendInst(Inst{
+			InstOpcode::Extract,
+			allocPayload(m_extractIndices, _index),
+			_block,
+			{_producer}
+		});
+	}
+
+	/// Allocates a new Upsilon Inst targeting `_phi`, feeding `_value` from `_block`.
+	InstId appendUpsilon(BlockId const _block, InstId const _value, InstId const _phi)
+	{
+		yulAssert(inst(_phi).isPhi());
+		return appendInst(Inst{InstOpcode::Upsilon, allocPayload(m_upsilonPhis, _phi), _block, {_value}});
 	}
 
 private:
@@ -225,9 +225,10 @@ private:
 	std::vector<Inst> m_insts;
 	std::vector<u256> m_literalPayloads;
 	std::map<u256, InstId> m_literalDedup;
-	std::vector<ValueId> m_upsilonPhis;
+	std::vector<InstId> m_upsilonPhis;
 	std::vector<BuiltinCall> m_builtinPayloads;
 	std::vector<Call> m_callPayloads;
+	std::vector<OutputSize> m_extractIndices;
 };
 
 }

@@ -48,7 +48,16 @@ struct InstId
 	ValueType value = std::numeric_limits<ValueType>::max();
 	constexpr bool hasValue() const noexcept { return value != std::numeric_limits<ValueType>::max(); }
 	auto operator<=>(InstId const&) const = default;
+
+	/// Returns a human-readable string representation
+	std::string str(SSACFG const& _cfg) const;
 };
+
+/// Index type for multi-output Call/BuiltinCall projections (Extract). u8 covers the
+/// maximum number of returns a Call may produce.
+using OutputSize = std::uint8_t;
+/// Maximum number of outputs a Call/BuiltinCall may produce.
+inline constexpr std::size_t maxOutputs = std::numeric_limits<OutputSize>::max();
 
 enum class InstOpcode : std::uint8_t
 {
@@ -59,35 +68,7 @@ enum class InstOpcode : std::uint8_t
 	Call,  // user-defined function call
 	Unreachable,  // dead code
 	FunctionArg, // function param without inputs and a single output valueid
-};
-
-/// Identifies a specific produced value of an Inst.
-class ValueId
-{
-public:
-	// this value refers to the n-th return value of an operation
-	using OutputSize = std::uint8_t;
-	/// Maximum number of outputs an Inst may produce. Bounded by the encoding of `OutputSize`.
-	static constexpr std::size_t maxOutputs = std::numeric_limits<OutputSize>::max();
-
-	constexpr ValueId() = default;
-	constexpr ValueId(InstId const _instId, OutputSize const _outputPos = 0):
-		m_instId(_instId),
-		m_outputPos(_outputPos)
-	{}
-
-	bool constexpr hasValue() const noexcept { return m_instId.hasValue(); }
-	OutputSize constexpr outputPos() const noexcept { return m_outputPos; }
-	InstId constexpr instId() const noexcept { return m_instId; }
-
-	/// Returns a human-readable string representation
-	std::string str(SSACFG const& _cfg) const;
-
-	auto operator<=>(ValueId const&) const = default;
-
-private:
-	InstId m_instId{};
-	OutputSize m_outputPos{0};
+	Extract, // pure projection: single InstId input (multi-output producer) plus a u8 immediate index
 };
 
 }
@@ -116,22 +97,6 @@ struct fmt::formatter<solidity::yul::ssa::InstId>
 	{
 		if (!_instId.hasValue())
 			return fmt::format_to(_ctx.out(), "empty");
-		return fmt::format_to(_ctx.out(), "i{}", _instId.value);
-	}
-};
-
-template<>
-struct fmt::formatter<solidity::yul::ssa::ValueId>
-{
-	static auto constexpr parse(format_parse_context& ctx) -> decltype(ctx.begin()) { return ctx.begin(); }
-
-	template<typename FormatContext>
-	auto format(solidity::yul::ssa::ValueId const& _valueId, FormatContext& _ctx) const -> decltype(_ctx.out())
-	{
-		if (!_valueId.hasValue())
-			return fmt::format_to(_ctx.out(), "empty");
-		if (_valueId.outputPos() == 0)
-			return fmt::format_to(_ctx.out(), "v{}", _valueId.instId().value);
-		return fmt::format_to(_ctx.out(), "v{}.{}", _valueId.instId().value, _valueId.outputPos());
+		return fmt::format_to(_ctx.out(), "v{}", _instId.value);
 	}
 };

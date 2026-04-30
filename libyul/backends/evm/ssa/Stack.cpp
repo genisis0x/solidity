@@ -30,12 +30,12 @@ std::string slotToString(StackSlot const& _slot)
 {
 	switch (_slot.kind())
 	{
-	case StackSlot::Kind::ValueID:
-		if (_slot.isLiteralValueID())
-			return fmt::format("lit{}", _slot.valueID().instId().value);
-		if (_slot.isPhiValueID())
-			return fmt::format("phi{}", _slot.valueID().instId().value);
-		return fmt::format("{}", _slot.valueID());
+	case StackSlot::Kind::Value:
+		if (_slot.isLiteralValue())
+			return fmt::format("lit{}", _slot.value().value);
+		if (_slot.isPhiValue())
+			return fmt::format("phi{}", _slot.value().value);
+		return fmt::format("{}", _slot.value());
 	case StackSlot::Kind::Junk:
 		return "JUNK";
 	case StackSlot::Kind::FunctionCallReturnLabel:

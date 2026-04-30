@@ -59,13 +59,13 @@ struct SSACFGDebugInfo
 
 	langutil::DebugData::ConstPtr instDebugData(InstId _id) const { return lookup(m_instDebugData, _id.value); }
 
-	void setValueDebugData(ValueId _id, langutil::DebugData::ConstPtr _data)
+	void setValueDebugData(InstId _id, langutil::DebugData::ConstPtr _data)
 	{
 		yulAssert(_id.hasValue());
 		m_valueDebugData[_id] = std::move(_data);
 	}
 
-	langutil::DebugData::ConstPtr valueDebugData(ValueId _id) const
+	langutil::DebugData::ConstPtr valueDebugData(InstId _id) const
 	{
 		auto const it = m_valueDebugData.find(_id);
 		if (it == m_valueDebugData.end())
@@ -91,7 +91,7 @@ private:
 	std::vector<langutil::DebugData::ConstPtr> m_blockDebugData;
 	std::vector<langutil::DebugData::ConstPtr> m_exitDebugData;
 	std::vector<langutil::DebugData::ConstPtr> m_instDebugData;
-	std::map<ValueId, langutil::DebugData::ConstPtr> m_valueDebugData;
+	std::map<InstId, langutil::DebugData::ConstPtr> m_valueDebugData;
 };
 
 }

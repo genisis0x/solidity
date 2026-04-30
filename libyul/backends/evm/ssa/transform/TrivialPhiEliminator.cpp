@@ -41,13 +41,13 @@ struct TrivialPhiEliminator
 	SSACFG& cfg;
 
 	// phi_id -> values of upsilons targeting this phi
-	std::vector<std::vector<SSACFG::ValueId>> upsilonValuesForPhi;
+	std::vector<std::vector<InstId>> upsilonValuesForPhi;
 	// phi_id -> blocks containing upsilons targeting this phi
 	std::vector<std::vector<SSACFG::BlockId>> phiTargetBlocks;
 	// phi_id -> phis whose upsilon values reference this phi
-	std::vector<std::vector<SSACFG::ValueId>> reversePhiUpsilonValues;
+	std::vector<std::vector<InstId>> reversePhiUpsilonValues;
 	// phi_id -> canonical replacement (default = no substitution)
-	std::vector<SSACFG::ValueId> substitution;
+	std::vector<InstId> substitution;
 
 	explicit TrivialPhiEliminator(SSACFG& _cfg): cfg(_cfg) {}
 
@@ -87,9 +87,9 @@ private:
 		for (SSACFG::BlockId blockId{0}; blockId.value < cfg.numBlocks(); ++blockId.value)
 		{
 			cfg.forEachUpsilon(cfg.block(blockId), [&](InstId const instId, SSACFG::Inst const& inst) {
-				SSACFG::ValueId const phi = cfg.upsilonPhi(instId);
-				SSACFG::ValueId const value = inst.inputs.at(0);
-				auto const phiIdx = phi.instId().value;
+				InstId const phi = cfg.upsilonPhi(instId);
+				InstId const value = inst.inputs.at(0);
+				auto const phiIdx = phi.value;
 				if (phiIdx >= upsilonValuesForPhi.size())
 				{
 					upsilonValuesForPhi.resize(phiIdx + 1);
@@ -101,7 +101,7 @@ private:
 				phiTargetBlocks[phiIdx].push_back(blockId);
 				if (cfg.isPhi(value))
 				{
-					auto const valIdx = value.instId().value;
+					auto const valIdx = value.value;
 					if (valIdx >= reversePhiUpsilonValues.size())
 						reversePhiUpsilonValues.resize(valIdx + 1);
 					reversePhiUpsilonValues[valIdx].push_back(phi);
@@ -122,7 +122,7 @@ private:
 			for (auto& val: upsilonValues)
 				if (cfg.isPhi(val))
 				{
-					auto const idx = val.instId().value;
+					auto const idx = val.value;
 					bool const hasUpsilons = idx < upsilonValuesForPhi.size() && !upsilonValuesForPhi[idx].empty();
 					if (!hasUpsilons)
 						val = unreachable;
@@ -133,19 +133,19 @@ private:
 	{
 		for (SSACFG::BlockId blockId{0}; blockId.value < cfg.numBlocks(); ++blockId.value)
 		{
-			// Snapshot the phi ValueIds because tryRemove mutates block.instructions.
-			std::vector<SSACFG::ValueId> phis;
+			// Snapshot the phi InstIds because tryRemove mutates block.instructions.
+			std::vector<InstId> phis;
 			cfg.forEachPhi(cfg.block(blockId), [&](InstId const instId, SSACFG::Inst const&) {
-				phis.push_back(ValueId{instId});
+				phis.push_back(instId);
 			});
 			for (auto const phi: phis)
 				tryRemove(phi);
 		}
 	}
 
-	void tryRemove(SSACFG::ValueId _phi)
+	void tryRemove(InstId _phi)
 	{
-		auto const phiIdx = _phi.instId().value;
+		auto const phiIdx = _phi.value;
 
 		// early exit if this phi was already processed
 		if (phiIdx < substitution.size() && substitution[phiIdx].hasValue())
@@ -153,7 +153,7 @@ private:
 
 		// check triviality and canonicalize arguments to account for already-substituted phis;
 		// skip self-references and unreachable values
-		SSACFG::ValueId same;
+		InstId same;
 		if (phiIdx < upsilonValuesForPhi.size())
 			for (auto const arg: upsilonValuesForPhi[phiIdx])
 			{
@@ -171,9 +171,9 @@ private:
 
 		// remove the phi from its defining block
 		{
-			auto& block = cfg.block(cfg.inst(_phi.instId()).block);
+			auto& block = cfg.block(cfg.inst(_phi).block);
 			yulAssert(cfg.isPhi(_phi));
-			std::erase(block.instructions, _phi.instId());
+			std::erase(block.instructions, _phi);
 		}
 
 		// record the substitution
@@ -182,16 +182,16 @@ private:
 		substitution[phiIdx] = same;
 
 		// update upsilon.value fields and `upsilonValuesForPhi` for all phis whose upsilons reference `_phi` as a value
-		std::vector<SSACFG::ValueId> cascades;
+		std::vector<InstId> cascades;
 		if (phiIdx < reversePhiUpsilonValues.size())
 		{
 			for (auto const targetPhi: reversePhiUpsilonValues[phiIdx])
 			{
 				// update upsilonValuesForPhi[targetPhi]: _phi with same
-				auto& vals = upsilonValuesForPhi[targetPhi.instId().value];
+				auto& vals = upsilonValuesForPhi[targetPhi.value];
 				ranges::replace(vals, _phi, same);
-				if (targetPhi.instId().value < phiTargetBlocks.size())
-					for (auto const blockId: phiTargetBlocks[targetPhi.instId().value])
+				if (targetPhi.value < phiTargetBlocks.size())
+					for (auto const blockId: phiTargetBlocks[targetPhi.value])
 						cfg.forEachUpsilon(cfg.block(blockId), [&](InstId const instId, SSACFG::Inst& inst) {
 							if (cfg.upsilonPhi(instId) == targetPhi && inst.inputs.at(0) == _phi)
 								inst.inputs[0] = same;
@@ -199,9 +199,9 @@ private:
 				// maintain reverse index
 				if (cfg.isPhi(same))
 				{
-					if (same.instId().value >= reversePhiUpsilonValues.size())
-						reversePhiUpsilonValues.resize(same.instId().value + 1);
-					reversePhiUpsilonValues[same.instId().value].push_back(targetPhi);
+					if (same.value >= reversePhiUpsilonValues.size())
+						reversePhiUpsilonValues.resize(same.value + 1);
+					reversePhiUpsilonValues[same.value].push_back(targetPhi);
 				}
 				cascades.push_back(targetPhi);
 			}
@@ -226,9 +226,9 @@ private:
 			tryRemove(cascadingPhi);
 	}
 
-	SSACFG::ValueId canonicalize(SSACFG::ValueId const _v)
+	InstId canonicalize(InstId const _v)
 	{
-		auto const idx = _v.instId().value;
+		auto const idx = _v.value;
 		if (idx >= substitution.size())
 			return _v;
 		auto& sub = substitution[idx];
@@ -241,7 +241,7 @@ private:
 
 	void applySubstitutions()
 	{
-		if (!ranges::any_of(substitution, [](ValueId const& _sub) { return _sub.hasValue(); }))
+		if (!ranges::any_of(substitution, [](InstId const& _sub) { return _sub.hasValue(); }))
 			return;
 
 		for (SSACFG::BlockId blockId{0}; blockId.value < cfg.numBlocks(); ++blockId.value)

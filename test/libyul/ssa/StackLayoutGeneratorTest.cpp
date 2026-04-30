@@ -79,7 +79,12 @@ protected:
 		_out << "IN: " << stackToString(blockLayout->stackIn) << "\\l\\\n";
 
 		std::size_t i = 0;
-		m_cfg.forEachOperation(block, [&](InstId const instId, SSACFG::Inst const& inst) {
+		for (std::size_t pos = 0; pos < block.instructions.size(); ++pos)
+		{
+			InstId const instId = block.instructions[pos];
+			auto const& inst = m_cfg.inst(instId);
+			if (!inst.isOperation())
+				continue;
 			yulAssert(i < blockLayout->operationIn.size());
 			auto operationStack = blockLayout->operationIn[i];
 
@@ -95,11 +100,11 @@ protected:
 			yulAssert(inst.inputs.size() <= operationStack.size());
 			for (std::size_t j = 0; j < inst.inputs.size(); ++j)
 				operationStack.pop_back();
-			for (auto const& output: SSACFG::outputsOf(instId, inst.numOutputs))
-				operationStack.push_back(StackSlot::makeValueID(m_cfg, output));
+			for (InstId const output: m_cfg.opOutputs(block, pos))
+				operationStack.push_back(StackSlot::makeValue(m_cfg, output));
 			_out << stackToString(operationStack) << "\\l\\\n";
 			++i;
-		});
+		}
 
 		_out << "\\l\\\n";
 		_out << "OUT: " << stackToString(blockLayout->exitIn) << "\\l\\\n";

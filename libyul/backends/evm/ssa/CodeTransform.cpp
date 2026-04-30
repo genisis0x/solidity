@@ -161,8 +161,8 @@ CodeTransform::CodeTransform(
 	expectedStackTop.reserve(m_cfg.arguments.size() + (isFunctionGraph && m_cfg.canContinue ? 1 : 0));
 	if (isFunctionGraph && m_cfg.canContinue)
 		expectedStackTop.push_back(StackSlot::makeFunctionReturnLabel(m_graphID));
-	for (auto const& valueID: m_cfg.arguments | ranges::views::reverse)
-		expectedStackTop.push_back(StackSlot::makeValueID(_cfg, valueID));
+	for (auto const& arg: m_cfg.arguments | ranges::views::reverse)
+		expectedStackTop.push_back(StackSlot::makeValue(_cfg, arg));
 	assertLayoutCompatibility(m_stack.data(), expectedStackTop);
 }
 
@@ -234,7 +234,7 @@ void CodeTransform::operator()(InstId _instId, StackData const& _operationInputL
 		m_stack | ranges::views::take_last(_inst.inputs.size()),
 		_inst.inputs
 	))
-		yulAssert(stackEntry.isValueID() && stackEntry.valueID() == input);
+		yulAssert(stackEntry.isValue() && stackEntry.value() == input);
 
 	// if the function can continue (doesn't always abort), make sure we have the correct return label slot in place
 	if (hasReturnLabel)
@@ -308,17 +308,19 @@ void CodeTransform::operator()(InstId _instId, StackData const& _operationInputL
 	// simulate that the inputs are consumed
 	for (size_t i = 0; i < _inst.inputs.size(); ++i)
 		m_stack.pop<false>();
-	// simulate that the outputs are produced
-	for (auto value: SSACFG::outputsOf(_instId, _inst.numOutputs))
-		m_stack.push<false>(StackSlot::makeValueID(m_cfg, value));
+	// simulate that the outputs are produced. For multi-output ops the slots are named
+	// by the trailing Extracts; for single-output the op's own InstId; void ops produce
+	// nothing.
+	auto const outputs = m_cfg.opOutputs(m_cfg.block(_inst.block), _instId);
+	for (InstId const id: outputs)
+		m_stack.push<false>(StackSlot::makeValue(m_cfg, id));
 
-	// Assert that the operation produced its proclaimed output.
-	yulAssert(m_stack.size() == baseHeight + _inst.numOutputs);
+	yulAssert(m_stack.size() == baseHeight + outputs.size());
 	for (auto const& [stackEntry, output]: ranges::views::zip(
-		m_stack.data() | ranges::views::take_last(_inst.numOutputs),
-		SSACFG::outputsOf(_instId, _inst.numOutputs)
+		m_stack.data() | ranges::views::take_last(outputs.size()),
+		outputs
 	))
-		yulAssert(stackEntry.isValueID() && stackEntry.valueID() == output);
+		yulAssert(stackEntry.isValue() && stackEntry.value() == output);
 	yulAssert(
 		static_cast<int>(m_stack.size()) == m_assembly.stackHeight(),
 		fmt::format("symbolic stack size = {} =/= {} = assembly stack height", m_stack.size(), m_assembly.stackHeight())
@@ -335,7 +337,7 @@ void CodeTransform::operator()(SSACFG::BlockId const& _currentBlock, SSACFG::Bas
 {
 	yulAssert(static_cast<int>(m_stack.size()) == m_assembly.stackHeight());
 	// condition must be at the top of the stack
-	yulAssert(m_stack.top().isValueID() && m_stack.top().valueID() == _conditionalJump.condition);
+	yulAssert(m_stack.top().isValue() && m_stack.top().value() == _conditionalJump.condition);
 	// emit JUMPI to nonZero block
 	m_assembly.appendJumpToIf(m_blockLabels[_conditionalJump.nonZero.value]);
 	// update symbolic stack by popping the condition as it'll be consumed by JUMPI
@@ -391,8 +393,8 @@ void CodeTransform::operator()(SSACFG::BlockId const&, SSACFG::BasicBlock::Funct
 	for (std::size_t i = 0; i < _functionReturn.returnValues.size(); ++i)
 	{
 		auto const& returnValueSlot = m_stack.slot(StackOffset{i});
-		yulAssert(returnValueSlot.isValueID());
-		yulAssert(returnValueSlot.valueID() == _functionReturn.returnValues[i]);
+		yulAssert(returnValueSlot.isValue());
+		yulAssert(returnValueSlot.value() == _functionReturn.returnValues[i]);
 	}
 	m_assembly.appendJump(0, AbstractAssembly::JumpType::OutOfFunction);
 }

@@ -24,8 +24,8 @@ PhiInverse::PhiInverse(SSACFG const& _cfg, SSACFG::BlockId const& _from, SSACFG:
 {
 	_cfg.forEachUpsilon(_cfg.block(_from), [&](InstId const instId, SSACFG::Inst const& inst) {
 		if (
-			ValueId const phi = _cfg.upsilonPhi(instId);
-			_cfg.inst(phi.instId()).block == _to
+			InstId const phi = _cfg.upsilonPhi(instId);
+			_cfg.inst(phi).block == _to
 		)
 			m_phiToPreImage[phi] = inst.inputs.at(0);
 	});
@@ -36,12 +36,12 @@ bool PhiInverse::noOp() const
 	return m_phiToPreImage.empty();
 }
 
-SSACFG::ValueId PhiInverse::operator()(SSACFG::ValueId _valueId) const
+InstId PhiInverse::operator()(InstId _valueId) const
 {
 	return solidity::util::valueOrDefault(m_phiToPreImage, _valueId, _valueId);
 }
 
-std::map<SSACFG::ValueId, SSACFG::ValueId> const& PhiInverse::data() const
+std::map<InstId, InstId> const& PhiInverse::data() const
 {
 	return m_phiToPreImage;
 }

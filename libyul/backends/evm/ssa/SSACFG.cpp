@@ -41,7 +41,7 @@ namespace
 
 /// Build a human-readable Phi/Upsilon annotation for a phi value.
 /// Shows which upsilons feed it, listed per predecessor block.
-std::string formatPhi(SSACFG const& _cfg, ValueId _phiId)
+std::string formatPhi(SSACFG const& _cfg, InstId _phiId)
 {
 	// Collect all upsilons targeting _phiId from the whole CFG.
 	std::vector<std::string> formattedUpsilons;
@@ -73,7 +73,7 @@ protected:
 	void writeBlockLabel(std::ostream& _out, BlockId _blockId) override
 	{
 		auto const& block = m_cfg.block(_blockId);
-		auto const valueToString = [&](ValueId const& valueId) { return valueId.str(m_cfg); };
+		auto const valueToString = [&](InstId const& valueId) { return valueId.str(m_cfg); };
 
 		if (m_liveness)
 		{
@@ -101,31 +101,47 @@ protected:
 			_out << fmt::format("\\\nBlock {}\\n", _blockId.value);
 
 		// Phis first, then BuiltinCall / Call in program order. Upsilons are rendered
-		// under successor phis (via formatPhi) and skipped here.
+		// under successor phis (via formatPhi) and skipped here. Extracts are folded into
+		// the LHS of their producing operation.
 		m_cfg.forEachPhi(block, [&](InstId const instId, SSACFG::Inst const&) {
-			ValueId const phi{instId};
-			_out << fmt::format("phi{} := {}\\l\\\n", instId.value, formatPhi(m_cfg, phi));
+			_out << fmt::format("phi{} := {}\\l\\\n", instId.value, formatPhi(m_cfg, instId));
 		});
-		m_cfg.forEachOperation(block, [&](InstId const instId, SSACFG::Inst const& inst) {
+		for (std::size_t i = 0; i < block.instructions.size(); ++i)
+		{
+			InstId const instId = block.instructions[i];
+			auto const& inst = m_cfg.inst(instId);
+			if (!inst.isOperation())
+				continue;
 			std::string label;
+			std::size_t numReturns;
 			if (inst.opcode == InstOpcode::Call)
 			{
 				auto const graphID = m_cfg.callPayload(instId).graphID;
 				label = m_controlFlow ? m_controlFlow->functionGraph(graphID)->name : fmt::format("func{}", graphID);
+				numReturns = m_controlFlow ? m_controlFlow->functionGraph(graphID)->numReturns : 0;
 			}
 			else
-				label = m_cfg.evmDialect.builtin(m_cfg.builtinPayload(instId).builtin).name;
-			if (inst.numOutputs > 0)
+			{
+				auto const& builtin = m_cfg.evmDialect.builtin(m_cfg.builtinPayload(instId).builtin);
+				label = builtin.name;
+				numReturns = builtin.numReturns;
+			}
+			if (numReturns == 1)
+				_out << fmt::format("{} := ", valueToString(instId));
+			else if (numReturns > 1)
+			{
+				auto const extracts = m_cfg.extractsOf(block, i);
 				_out << fmt::format(
 					"{} := ",
-					fmt::join(SSACFG::outputsOf(instId, inst.numOutputs) | ranges::views::transform(valueToString), ", ")
+					fmt::join(extracts | ranges::views::transform(valueToString), ", ")
 				);
+			}
 			_out << fmt::format(
 				"{}({})\\l\\\n",
 				escapeLabel(label),
 				fmt::join(inst.inputs | ranges::views::transform(valueToString), ", ")
 			);
-		});
+		}
 	}
 
 	std::vector<std::pair<std::string, std::string>> blockNodeAttributes(BlockId _blockId) override
