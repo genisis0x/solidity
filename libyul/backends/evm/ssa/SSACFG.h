@@ -140,6 +140,9 @@ public:
 	bool isUnreachable(InstId const _id) const { return inst(_id).isUnreachable(); }
 	bool isFunctionArg(InstId const _id) const { return inst(_id).isFunctionArg(); }
 	bool isExtract(InstId const _id) const { return inst(_id).isExtract(); }
+	bool isIdentity(InstId const _id) const { return inst(_id).isIdentity(); }
+	bool isNop(InstId const _id) const { return inst(_id).isNop(); }
+	bool isTombstone(InstId const _id) const { return inst(_id).isTombstone(); }
 	bool isOperation(InstId const _id) const { return inst(_id).isOperation(); }
 
 	/// Returns the phi targeted by an Upsilon Inst.
@@ -245,6 +248,28 @@ public:
 	InstId emitUpsilon(BlockId const _block, InstId const _value, InstId const _phi)
 	{
 		return scheduleInBlock(m_instructions.appendUpsilon(_block, _value, _phi), _block);
+	}
+
+	/// Flips _target's opcode to Identity forwarding _forward. _target's InstId, block,
+	/// and slot position inside `block.instructions` are unchanged; existing users keep
+	/// their references intact and resolve through the Identity until removeIdentities.
+	void replaceWithIdentity(InstId const _target, InstId const _forward)
+	{
+		m_instructions.replaceWithIdentity(_target, _forward);
+	}
+
+	/// Flips _target to Const carrying _value. If a Const for _value already exists, the
+	/// implementation falls back to flipping _target to Identity forwarding the dedup'd
+	/// Const, preserving the literal-dedup uniqueness invariant.
+	void replaceWithConst(InstId const _target, u256 _value)
+	{
+		m_instructions.replaceWithConst(_target, std::move(_value));
+	}
+
+	/// Flips _target to Nop. Caller must ensure _target produces no observable value.
+	void replaceWithNop(InstId const _target)
+	{
+		m_instructions.replaceWithNop(_target);
 	}
 
 	std::string toDot(

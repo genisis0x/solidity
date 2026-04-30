@@ -34,13 +34,16 @@ std::string InstId::str(SSACFG const& _cfg) const
 	case InstOpcode::Call:
 	case InstOpcode::FunctionArg:
 	case InstOpcode::Extract:
+	case InstOpcode::Identity:
 		return fmt::format("v{}", value);
 	case InstOpcode::Phi:
 		return fmt::format("phi{}", value);
 	case InstOpcode::Unreachable:
 		return "[unreachable]";
 	case InstOpcode::Upsilon:
-		yulAssert(false, "Upsilon Insts have no output value");
+	case InstOpcode::Nop:
+	case InstOpcode::Tombstone:
+		yulAssert(false, "Inst has no output value");
 	}
 	util::unreachable();
 }
