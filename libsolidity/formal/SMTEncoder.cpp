@@ -453,7 +453,7 @@ void SMTEncoder::endVisit(UnaryOperation const& _op)
 {
 	/// We need to shortcut here due to potentially unknown
 	/// rational number sizes.
-	if (_op.annotation().type->category() == Type::Category::RationalNumber)
+	if (isConstant(_op))
 		return;
 
 	if (TokenTraits::isBitOp(_op.getOperator()) && !*_op.annotation().userDefinedFunction)
